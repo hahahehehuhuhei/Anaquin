@@ -663,7 +663,7 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
     mv(o.work + "/" + o.tsvL1, o.work + "/" + o.tsvL1NotMerged);
     
     o.tsvL2 = "notMerged.tsv";
-    mv(o.work + "/" + o.tsvL, o.work + "/" + o.tsvL2);
+    mv(o.work + "/" + o.tsvL1, o.work + "/" + o.tsvL2);
     
     // Note writeL() writes out to like "S0015_LD_016_D_1", "S0015_LD_016_D_2". Let's combine.
     mergeL(o.work + "/" + o.tsvL1NotMerged, o.work + "/" + o.tsvL1);
