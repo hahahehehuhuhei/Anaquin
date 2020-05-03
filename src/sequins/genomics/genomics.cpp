@@ -662,8 +662,8 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
     o.tsvL1NotMerged = "notMerged.tsv";
     mv(o.work + "/" + o.tsvL1, o.work + "/" + o.tsvL1NotMerged);
     
-    o.tsvL2 = "notMerged.tsv";
-    mv(o.work + "/" + o.tsvL1, o.work + "/" + o.tsvL2);
+    // TODO: ???? o.tsvL2 = "notMerged.tsv";
+    // TODO: ???? mv(o.work + "/" + o.tsvL1, o.work + "/" + o.tsvL2);
     
     // Note writeL() writes out to like "S0015_LD_016_D_1", "S0015_LD_016_D_2". Let's combine.
     mergeL(o.work + "/" + o.tsvL1NotMerged, o.work + "/" + o.tsvL1);
