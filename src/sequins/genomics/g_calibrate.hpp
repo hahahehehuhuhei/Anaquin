@@ -7,12 +7,7 @@ namespace Anaquin
 {
     struct GCalibrate
     {
-        enum class Method
-        {
-            Mean,
-            Median,
-            Percent
-        };
+        typedef CalibrateMethod Method;
         
         struct Stats
         {
