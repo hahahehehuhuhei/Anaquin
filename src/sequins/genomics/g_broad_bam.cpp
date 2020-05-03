@@ -510,6 +510,7 @@ void GBroadBam::report(const FileName &f1, const FileName &f2, const Options &o1
     if (o1.debug) { o2.work = o1.work;   } // Always write to working directory if debug
     else          { o2.work = tmpPath(); }
     
+    o2.meth    = o1.meth;
     o2.seqC    = o1.seqC; // (BroadBAM doesn't use seqL because it uses sampling coverage)
     o2.writer  = o1.writer;
     o2.logger  = o1.logger;
