@@ -19,6 +19,7 @@ namespace Anaquin
             FileName origW;
             FileName index;
             Proportion seqC;
+            CalibrateMethod meth = CalibrateMethod::Mean;
         };
         
         struct SomaticReport
