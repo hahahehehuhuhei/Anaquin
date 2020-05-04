@@ -11,7 +11,9 @@ namespace Anaquin
         {
             Mean,
             Median,
-            Percent
+            Percent,
+            SampleMean,
+            SampleMedian
         };
         
         struct Stats
