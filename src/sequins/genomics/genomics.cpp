@@ -770,9 +770,17 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
             // Global statistics for the entire sample
             const auto samp = r.samp.r2.stats();
             
-            o.logInfo("Inside getNormFactors(). sample.mean = " + std::to_string(samp.mean));
-            o.logInfo("Inside getNormFactors(). sample.median = " + std::to_string(samp.p50));
-            
+            if (o.debug)
+            {
+                for (auto &i : samp.raws)
+                {
+                    o.logInfo("[DEBUG]: " + std::to_string(i));
+                }
+
+                o.logInfo("Inside getNormFactors(). sample.mean = " + std::to_string(samp.mean));
+                o.logInfo("Inside getNormFactors(). sample.median = " + std::to_string(samp.p50));
+            }
+                        
             for (auto &i : inters)
             {
                 if (isChrQ && i.first != GDecoyChrQS)
@@ -786,13 +794,21 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
                     
                     const auto before = r.before.r2.find(name);
                     
-                    // Sample coverage
-                    const auto samC = o.meth == CalibrateMethod::SampleMedian ? samp.p50 :
+                    const auto useGlobal = o.meth == CalibrateMethod::SampleMedian ||
+                                           o.meth == CalibrateMethod::SampleMean;
+                    
+                    // Sample coverage (local or global)
+                    const auto samC = o.meth == CalibrateMethod::SampleMedian ? samp.p50  :
+                                      o.meth == CalibrateMethod::SampleMean   ? samp.mean :
                                       getLocalCoverage(r.samp.r2.find(name)->stats(), o.meth);
                     
+                    if (o.debug)
+                    {
+                        o.logInfo("Sample: " + std::to_string(samC) + " for " + name);
+                    }
+                    
                     // Local calibration method for sequins (SampleMedian is only for calculating sample coverage)
-                    const auto m2 = o.meth == CalibrateMethod::SampleMedian ? CalibrateMethod::Mean :
-                                    o.meth;
+                    const auto m2 = useGlobal ? CalibrateMethod::Mean : o.meth;
                     
                     // Sequin coverage
                     const auto seqC = before ? getLocalCoverage(r.before.r2.find(name)->stats(), m2) : NAN;
