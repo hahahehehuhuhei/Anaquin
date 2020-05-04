@@ -19,6 +19,7 @@ namespace Anaquin
             FileName origW;
             FileName index;
             Proportion seqC;
+            CalibrateMethod meth = CalibrateMethod::Mean;
         };
         
         struct SomaticReport
@@ -49,7 +50,7 @@ namespace Anaquin
         };
         
         static MixtureReport reportM(const FileName &, std::shared_ptr<Translation>);
-        static SyntheticReport reportL(const FileName &);        
+        static SyntheticReport reportL(const FileName &);
         static ErrorReport reportE(const FileName &,
                                    const FileName &,
                                    const FileName &,
@@ -58,7 +59,7 @@ namespace Anaquin
         static CoverageReport reportC(const FileName &, bool isChrQ = true);
         static SomaticReport reportS(const FileName &);
         
-        static void report(const FileName &, const FileName &, const Options &o = Options());        
+        static void report(const FileName &, const FileName &, const Options &o = Options());
         static void report(const FileName &f1, const Options &o = Options())
         {
             GBroadBam::report(f1, "", o);
