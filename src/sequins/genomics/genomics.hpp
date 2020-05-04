@@ -177,6 +177,8 @@ namespace Anaquin
          *     - writeMC is the output calibration file
          */
         
+        bool debug = false;
+        
         // Inout alignment file for writeL2
         FileName inputL2;
         
