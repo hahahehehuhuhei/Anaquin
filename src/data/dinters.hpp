@@ -327,6 +327,11 @@ namespace Anaquin
                     for (const auto &j : x.hist)
                     {
                         stats.hist[j.first] += j.second;
+
+                        for (auto k = 0; k < j.second; k++)
+                        {
+                            stats.raws.push_back(j.first);
+                        }
                     }
                 }
             
@@ -395,14 +400,23 @@ namespace Anaquin
                 stats.min       = std::min(stats.min, x.min);
                 stats.max       = std::max(stats.max, x.max);
                 
+                for (auto &i : x.raws)
+                {
+                    stats.raws.push_back(i);
+                }
+
                 for (const auto &j : x.hist)
                 {
                     stats.hist[j.first] += j.second;
                 }
-
-                stats.mean = stats.sums / stats.length;
             }
-            
+
+            std::sort(stats.raws.begin(), stats.raws.end());
+            stats.mean = stats.sums / stats.length;
+            stats.p25  = quant(stats.raws, 0.25);
+            stats.p50  = quant(stats.raws, 0.50);
+            stats.p75  = quant(stats.raws, 0.75);
+
             return stats;
         }
     };
