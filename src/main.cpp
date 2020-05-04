@@ -268,7 +268,7 @@ static const struct option long_opts[] =
     { "kmer",      required_argument, 0, OPT_KMER   },
     { "threshold", required_argument, 0, OPT_RULE   },
     { "skip",      required_argument, 0, OPT_SKIP   },
-
+    
     { "r",            required_argument, 0, OPT_RESOURCE },
     { "resource_dir", required_argument, 0, OPT_RESOURCE },
 
@@ -1254,8 +1254,10 @@ void parse(int argc, char ** argv)
                     // How to calibrate?
                     const auto meth = _p.opts.count(OPT_METHOD) ? _p.opts[OPT_METHOD] : "mean";
                     
-                    if      (meth == "mean")   { o.meth = Method::Mean;   }
-                    else if (meth == "median") { o.meth = Method::Median; }
+                    if      (meth == "mean")         { o.meth = Method::Mean;   }
+                    else if (meth == "median")       { o.meth = Method::Median; }
+                    else if (meth == "globalMean")   { o.meth = Method::SampleMean; }
+                    else if (meth == "globalMedian") { o.meth = Method::SampleMedian; }
                     else if (isFloat(meth))    { o.meth = Method::Percent; o.seqC = stof(meth); }
                     else
                     {
