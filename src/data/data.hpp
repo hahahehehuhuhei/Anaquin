@@ -98,7 +98,9 @@ namespace Anaquin
         None,
         Mean,
         Median,
-        Percent
+        Percent,
+        SampleMean,
+        SampleMedian,
     };
 
     class Confusion
