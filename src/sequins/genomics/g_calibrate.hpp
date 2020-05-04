@@ -7,14 +7,7 @@ namespace Anaquin
 {
     struct GCalibrate
     {
-        enum class Method
-        {
-            Mean,
-            Median,
-            Percent,
-            SampleMean,
-            SampleMedian
-        };
+        typedef CalibrateMethod Method;
         
         struct Stats
         {
@@ -44,14 +37,14 @@ namespace Anaquin
             
             bool writeS = false;
             bool writeD = false;
-            bool writeC = false;            
+            bool writeC = false;
         };
 
         static Stats analyze(const FileName &, const FileName &, const Options &);
 
         static void report(const FileName &, const Options &o = Options());
         static void report(const FileName &, const FileName &, const Options &o = Options());
-    };    
+    };
 }
 
 #endif
