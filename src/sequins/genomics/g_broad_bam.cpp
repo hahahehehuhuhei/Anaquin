@@ -517,6 +517,7 @@ void GBroadBam::report(const FileName &f1, const FileName &f2, const Options &o1
     o2.output  = o1.output;
     o2.showGen = false;
     o2.debug   = o1.debug;
+    o2.meth    = o1.meth;
 
     o2.writeS  = o1.work + "/sample.bam";
     o2.writeD  = o1.work + "/sequin.bam";
