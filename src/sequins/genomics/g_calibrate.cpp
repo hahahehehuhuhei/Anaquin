@@ -7,6 +7,7 @@ typedef GCalibrate::Options Options;
 GCalibrate::Stats GCalibrate::analyze(const FileName &f1, const FileName &f2, const Options &o)
 {
     GBroadBam::Options o_(cloneO(o)); o_.index = o.index; o_.debug = true; o_.showGen = false;
+    o_.meth  = o.meth;
     o_.origW = o.work;
     
     // Generate outputs like BroadBAM (we're going to move files later)
