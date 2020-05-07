@@ -802,9 +802,13 @@ void parse(int argc, char ** argv)
                     
                     const auto bothHR = _p.opts.count(OPT_SAMPLE) && _p.opts.count(OPT_SEQUIN);
                     
-                    const auto hr = _p.opts.count(OPT_R_HUMAN) ? _p.opts[OPT_R_HUMAN] : GRegionBED_(build);
-                    const auto dr = _p.opts.count(OPT_R_DECOY) ? _p.opts[OPT_R_DECOY] : !bothHR ? GRegionBED_(Build::chrQ) : GRegionBED_(build);
-                    const auto rr = _p.opts.count(OPT_R_REGS)  ? _p.opts[OPT_R_REGS]  : dr;
+                    const auto hr = _p.opts.count(OPT_R_BED) ? _p.opts[OPT_R_BED] :
+                                    _p.opts.count(OPT_R_HUMAN) ? _p.opts[OPT_R_HUMAN] : GRegionBED_(build);
+                    const auto dr = _p.opts.count(OPT_R_BED) ? _p.opts[OPT_R_BED] :
+                                    _p.opts.count(OPT_R_DECOY) ? _p.opts[OPT_R_DECOY] : !bothHR ? GRegionBED_(Build::chrQ) : GRegionBED_(build);
+                    
+                    // Restricted regions
+                    const auto rr = _p.opts.count(OPT_R_REGS)  ? _p.opts[OPT_R_REGS] : dr;
                     
                     if (dr == rr)
                     {
