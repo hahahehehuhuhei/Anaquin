@@ -208,7 +208,7 @@ void GDecoyResults::writeV(const GDecoyResults &r, const GDecoyOptions &o)
         if (i.gt == Genotype::MSI)
         {
             continue;
-        }        
+        }
         else if (r.bAF.find(noPID(i.name)))
         {
             const auto X1 = r.bAF.find(noPID(i.name));
