@@ -276,7 +276,8 @@ static const struct option long_opts[] =
 
     { "mix",    required_argument, 0, OPT_MIXTURE },
     { "method", required_argument, 0, OPT_METHOD  },
-    
+    { "calibration_method", required_argument, 0, OPT_METHOD  },
+
     { "calibrate",        required_argument, 0, OPT_CALIB  },
     { "ladder_calibrate", required_argument, 0, OPT_LCALIB },
     
