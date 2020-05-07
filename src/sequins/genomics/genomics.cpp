@@ -363,9 +363,15 @@ std::map<SequinID, GDecoyResults::VariantData> GDecoyResults::buildAF(const Deco
         // Convert from hg38 to sequin relative
         if (!isChrQ)
         {
-            auto a = r2.find(noLast(noPID(v.name), "_"), false);
-            assert(a);
-            start -= (a->l().start - 1);
+            const auto tmp = r2.find(noLast(noPID(v.name), "_"), false);
+            
+            // Unable to construct AF, for example, custom BED file
+            if (!tmp)
+            {
+                continue;
+            }
+            
+            start -= (tmp->l().start - 1);
         }
 
         switch (v.type())
