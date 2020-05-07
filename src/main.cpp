@@ -1,1372 +1,1035 @@
-#include <ctime>
-#include <chrono>
-#include <iomanip>
-#include <iostream>
-#include <unistd.h>
-#include <getopt.h>
-#include <strings.h>
-#include <execinfo.h>
-#include <sys/stat.h>
-
-#include "sequins/rna/rna.hpp"
-#include "sequins/meta/meta.hpp"
-#include "sequins/rna/r_split.hpp"
-#include "sequins/meta/m_split.hpp"
-#include "sequins/genomics/g_tmm.hpp"
-#include "sequins/genomics/g_germ.hpp"
-#include "sequins/genomics/g_norm.hpp"
-#include "sequins/genomics/g_split.hpp"
-#include "sequins/genomics/g_somatic.hpp"
-#include "sequins/genomics/g_calibrate.hpp"
-#include "sequins/genomics/g_broad_bam.hpp"
-#include "sequins/genomics/g_broad_vcf.hpp"
-
-#include "parsers/parser_csv.hpp"
-#include "parsers/parser_vcf.hpp"
-
 #include "tools/tools.hpp"
+#include "tools/random.hpp"
+#include "data/standard.hpp"
 #include "data/resources.hpp"
-#include "tools/detector.hpp"
-#include "tools/bedtools.hpp"
-#include "tools/checkPackage.h"
-#include "tools/attributes.hpp"
+#include "sequins/sequins.hpp"
+#include "tools/calibrator.hpp"
+#include "parsers/parser_fa.hpp"
+#include "writers/vcf_writer.hpp"
+#include "writers/bam_writer.hpp"
 #include "writers/file_writer.hpp"
-#include "writers/terminal_writer.hpp"
-
-#ifdef UNIT_TEST
-#define CATCH_CONFIG_RUNNER
-#include <catch2/catch.hpp>
-#endif
-
-#define DEFAULT_EDGE 550
-#define DEFAULT_LADDER_POOL_CALIBRATION 0.1
+#include "parsers/parser_bambed.hpp"
+#include "sequins/genomics/genomics.hpp"
 
 using namespace Anaquin;
+using namespace std::chrono;
 
-typedef int Option;
+typedef DecoyAnalyzer::Results::MData MData;
+typedef DecoyAnalyzer::IDData IDData;
+typedef DecoyAnalyzer::Results DResults;
+typedef ParserBAMBED::Response Response;
+typedef LadderCalibrator::Method Method;
+typedef LadderCalibrator::Options::PoolData PoolData;
 
-typedef std::string Value;
-
-static Build __ha__;
-
-static std::string version() { return "3.18.0"; }
-
-/*
- * Options specified in the command line
- */
-
-#define OPT_TEST    320
-#define OPT_TOOL    321
-#define OPT_PATH    325
-
-#define OPT_R_BED    801
-#define OPT_METHOD   802
-#define OPT_R_VCF    803
-#define OPT_COMBINE  804
-#define OPT_MIXTURE  808
-#define OPT_R_HUMAN  809
-#define OPT_R_DECOY  810
-#define OPT_R_REGS   811
-#define OPT_RESOURCE 812
-#define OPT_BUILD    813
-#define OPT_SYNC     814
-#define OPT_ATTTSV   815
-#define OPT_FASTA    816
-#define OPT_KMER     817
-#define OPT_RULE     818
-#define OPT_THREAD   819
-#define OPT_EDGE     820
-#define OPT_SKIP     821
-#define OPT_MERGE    822
-#define OPT_WINDOW   823
-#define OPT_1        824
-#define OPT_2        825
-#define OPT_3        826
-#define OPT_4        827
-#define OPT_SAMPLE   829
-#define OPT_SEQUIN   830
-#define OPT_LCALIB   831
-#define OPT_FASTQ    832
-#define OPT_DEBUG    833
-#define OPT_VCF      834
-#define OPT_A1       835
-#define OPT_A2       836
-#define OPT_B1       837
-#define OPT_B2       838
-#define OPT_C1       839
-#define OPT_C2       840
-#define OPT_D1       841
-#define OPT_D2       842
-#define OPT_E1       843
-#define OPT_E2       844
-#define OPT_ONLY_S   845
-#define OPT_ONLY_D   846
-#define OPT_ONLY_C   847
-#define OPT_CALIB    848
-#define OPT_MMIX     849
-
-// Shared with other modules
-std::string __full_command__;
-
-static Path __working__;
-
-// Shared with other modules
-Path __output__;
-
-std::shared_ptr<FileWriter> __loggerW__;
-std::shared_ptr<TerminalWriter> __outputW__;
-
-static std::map<Value, Tool> _tools =
+void GDecoyResults::writeR(const GDecoyResults &r, const GDecoyOptions &o)
 {
-    { "rna",       Tool::RNA       },
-    { "meta",      Tool::Meta      },
-    { "norm",      Tool::Norm      },
-    { "tmm",       Tool::TMM       },
-    { "split",     Tool::Split     },
-    { "germline",  Tool::Germline  },
-    { "somatic",   Tool::Somatic   },
-    { "calibrate", Tool::Calibrate },
-    { "broad_bam", Tool::BroadBAM  },
-    { "broad_vcf", Tool::BroadVCF  }
-};
-
-struct Parsing
-{
-    Path path = "output";
-
-    // Specific options
-    std::map<Option, std::string> opts;
-    
-    std::map<Option, double> od;
-    
-    // How Anaquin is invoked
-    Command  cmd;
-
-    // Mixture A(1) or mixture B(2)?
-    Mixture mix = Mix_1;
-    
-    Tool tool;
-};
-
-// Wrap the variables so that it'll be easier to reset them
-static Parsing _p;
-
-static Scripts fixManual(const Scripts &str)
-{
-    auto x = str;
-    
-    boost::replace_all(x, "<b>", "\e[1m");
-    boost::replace_all(x, "</b>", "\e[0m");
-    boost::replace_all(x, "<i>", "\e[3m");
-    boost::replace_all(x, "</i>", "\e[0m");
-    
-    return x;
-}
-
-struct InvalidUsageException : public std::exception {};
-
-struct InvalidDependency : public std::runtime_error
-{
-    InvalidDependency(const std::string &x) : std::runtime_error(x) {}
-};
-
-struct InvalidOptionException : public std::exception
-{
-    InvalidOptionException(const std::string &o) : o(o) {}
-
-    const std::string o;
-};
-
-struct InvalidValueException : public std::exception
-{
-    InvalidValueException(const std::string &o, const std::string &v) : o(o), v(v) {}
-
-    const std::string o, v;
-};
-
-struct InvalidToolError : public InvalidValueException
-{
-    InvalidToolError(const std::string &v) : InvalidValueException("-t", v) {}
-};
-
-struct MissingOptionError : public std::exception
-{
-    MissingOptionError(const std::string &o) : o(o) {}
-
-    // Option that is missing
-    const std::string o;
-    
-    // Possible values for the missing option
-    const std::string r;
-};
-
-struct MissingBundleError : public std::runtime_error
-{
-    MissingBundleError(const Path &path) : std::runtime_error(path), path(path) {}
-    const Path path;
-};
-
-struct InvalidBundleError : public std::runtime_error
-{
-    InvalidBundleError(const FileName &file) : std::runtime_error(file), file(file) {}
-    const FileName file;
-};
-
-static const char *short_opts = ":";
-
-static const struct option long_opts[] =
-{
-    { "1", required_argument, 0, OPT_1 },
-    { "2", required_argument, 0, OPT_2 },
-    { "3", required_argument, 0, OPT_3 },
-    { "4", required_argument, 0, OPT_4 },
-
-    { "A1", required_argument, 0, OPT_A1 },
-    { "A2", required_argument, 0, OPT_A2 },
-    { "B1", required_argument, 0, OPT_B1 },
-    { "B2", required_argument, 0, OPT_B2 },
-    { "C1", required_argument, 0, OPT_C1 },
-    { "C2", required_argument, 0, OPT_C2 },
-    { "D1", required_argument, 0, OPT_D1 },
-    { "D2", required_argument, 0, OPT_D2 },
-    { "E1", required_argument, 0, OPT_E1 },
-    { "E2", required_argument, 0, OPT_E2 },
-    
-    { "v",   required_argument, 0, OPT_VCF },
-    { "vcf", required_argument, 0, OPT_VCF },
-
-    { "t",       required_argument, 0, OPT_THREAD },
-    { "threads", required_argument, 0, OPT_THREAD },
-
-    { "sample", required_argument, 0, OPT_SAMPLE },
-    { "sequin", required_argument, 0, OPT_SEQUIN },
-    { "sample_alignment", required_argument, 0, OPT_SAMPLE },
-    { "sequin_alignment", required_argument, 0, OPT_SEQUIN },
-
-    { "b",        required_argument, 0, OPT_COMBINE },
-    { "combined", required_argument, 0, OPT_COMBINE },
-
-    { "fq",      no_argument, 0, OPT_FASTQ },
-    { "debug",   no_argument, 0, OPT_DEBUG },
-    { "merge",   no_argument, 0, OPT_MERGE },
-
-    { "sample_bam",            no_argument, 0, OPT_ONLY_S },
-    { "sequin_bam",            no_argument, 0, OPT_ONLY_D },
-    { "calibrated_sequin_bam", no_argument, 0, OPT_ONLY_C },
-
-    { "human_regions",    required_argument, 0, OPT_R_HUMAN },
-    { "decoy_regions",    required_argument, 0, OPT_R_DECOY },
-    { "restrict_regions", required_argument, 0, OPT_R_REGS  },
-
-    { "manual_mix",      required_argument, 0, OPT_MMIX  },
-    { "manual_bed",      required_argument, 0, OPT_R_BED },
-    { "manual_fasta",    required_argument, 0, OPT_FASTA },
-
-    { "sample_variants", required_argument, 0, OPT_SAMPLE },
-    { "vcf_hg38", required_argument, 0, OPT_SEQUIN },
-
-    { "kmer",      required_argument, 0, OPT_KMER   },
-    { "threshold", required_argument, 0, OPT_RULE   },
-    { "skip",      required_argument, 0, OPT_SKIP   },
-    
-    { "r",            required_argument, 0, OPT_RESOURCE },
-    { "resource_dir", required_argument, 0, OPT_RESOURCE },
-
-    { "build", required_argument, 0, OPT_BUILD }, // Alternative genome assembly
-
-    { "mix",    required_argument, 0, OPT_MIXTURE },
-    { "method", required_argument, 0, OPT_METHOD  },
-    
-    { "calibrate",        required_argument, 0, OPT_CALIB  },
-    { "ladder_calibrate", required_argument, 0, OPT_LCALIB },
-    
-    { "edge",   required_argument, 0, OPT_EDGE   },
-    { "window", required_argument, 0, OPT_WINDOW },
-
-    { "o",      required_argument, 0, OPT_PATH },
-    { "output", required_argument, 0, OPT_PATH },
-
-    {0, 0, 0, 0 }
-};
-
-static Build parseBuild(const std::string &x)
-{
-    if      (x == "hg38") { return Build::hg38; }
-    else if (x == "hg19") { return Build::hg19; }
-    else if (x == "gr37") { return Build::gr37; }
-    else if (x == "gr38") { return Build::gr38; }
-    else
+    if (o.tsvR.empty())
     {
-        throw InvalidValueException("--build", "Invalid assembly build. Must be \"hg38\", \"hg19\", \"gr37\" or \"gr38\"");
+        return;
     }
+    
+    const auto f = boost::format("%1%\t%2%\t%3%\t%4%\t%5%\t%6%\t%7%\t%8%\t%9%\t%10$.2f\t%11$.2f\t%12$.2f\t%13$.2f");
+    
+    o.generate(o.tsvR);
+    o.writer->open(o.tsvR);
+    o.writer->write((boost::format(f) % "NAME"
+                                      % "CHROM"
+                                      % "START"
+                                      % "END"
+                                      % "EDGE"
+                                      % "MEAN_READ_LENGTH"
+                                      % "SAMPLE_READ"
+                                      % "PRE_READ"
+                                      % "POST_READ"
+                                      % "SAMPLE_COVERAGE"
+                                      % "PRE_COVERAGE"
+                                      % "POST_COVERAGE"
+                                      % "SCALE").str());
+
+    o.writer->write((boost::format(f) % "All"
+                                      % MISSING
+                                      % MISSING
+                                      % MISSING
+                                      % MISSING
+                                      % r.lib.meanRL()
+                                      % r.samp.total()
+                                      % r.before.total()
+                                      % r.after.total()
+                                      % MISSING
+                                      % MISSING
+                                      % MISSING
+                                      % MISSING).str());
+
+    auto r1 = o.r1.inters();
+
+    for (auto &i : r1)
+    {
+        for (auto &j : i.second.data())
+        {
+            const auto &name = j.second.id();
+            const auto samp = r.samp.r1.find(name);
+            const auto norm = o.seqC == NO_CALIBRATION ? getNAFromD(r.c1.norms, name, 4) : MISSING;
+            
+            const auto afterN = r.after.r1.find(name) ? S0(r.after.r1.find(name)->stats().n) : MISSING;
+            const auto afterM = r.after.r2.find(name) ? S4(r.after.r2.find(name)->stats().mean) : MISSING;
+            
+            const auto before = r.before.r2.find(name);
+            
+            o.writer->write((boost::format(f) % name
+                                              % i.first
+                                              % j.second.l().start
+                                              % j.second.l().end
+                                              % o.edge
+                                              % r.lib.meanRL()
+                                              % (samp ? S0(r.samp.r1.find(name)->stats().n) : MISSING)
+                                              % r.before.r1.find(name)->stats().n
+                                              % afterN
+                                              % (samp ? S4(r.samp.r2.find(name)->stats().mean) : MISSING)
+                                              % (before ? S4(r.before.r2.find(name)->stats().mean) : MISSING)
+                                              % afterM
+                                              % norm).str());
+        }
+    }
+
+    o.writer->close();
 }
 
-static std::string optToStr(int opt)
+void GDecoyResults::writeF(const GDecoyResults &r, const GDecoyOptions &o)
 {
-    for (const auto &o : long_opts)
+    if (o.tsvF.empty())
     {
-        if (o.val == opt)
+        return;
+    }
+    
+    const auto hasA = !o.writeMC.empty(); // Calibration?
+    const auto f = boost::format("%1%\t%2%\t%3%\t%4%\t%5%\t%6%\t%7$.2f\t%8$.2f");
+    
+    o.generate(o.tsvF);
+    o.writer->open(o.tsvF);
+    o.writer->write((boost::format(f) % "NAME"
+                                      % "CHROM"
+                                      % "START"
+                                      % "END"
+                                      % "PRE_READ"
+                                      % "POST_READ"
+                                      % "PRE_COVERAGE"
+                                      % "POST_COVERAGE").str());
+    
+    auto r5 = o.attr.inters();
+    
+    for (auto &i : r5)
+    {
+        for (auto &j : i.second.data())
         {
-            return o.name;
+            const auto &name = j.second.id();
+            const auto  samp = r.samp.r1.find(name);
+            
+            o.writer->write((boost::format(f) % name
+                                              % i.first
+                                              % j.second.l().start
+                                              % j.second.l().end
+                                              % r.before.r5.find(name)->stats().n
+                                              % (hasA ? S0(r.after.r5.find(name)->stats().n) : MISSING)
+                                              % S4(r.before.r5.find(name)->stats().mean)
+                                              % (hasA ? S4(r.after.r5.find(name)->stats().mean) : MISSING)).str());
         }
     }
     
-    throw std::runtime_error("Invalid option: " + std::to_string(opt));
+    o.writer->close();
 }
 
-static void printUsage()
+void GDecoyResults::writeL(const FileName &tsvL, const DecoyAnalyzer::Results &r, const DecoyAnalyzer::Options &o)
 {
-    extern Scripts Manual();
-    std::cout << std::endl << fixManual(replace(Manual(), "%VERSION%", version())) << std::endl << std::endl;
-}
-
-static Scripts manual(Tool tool)
-{
-    switch (tool)
+    if (tsvL.empty())
     {
-        case Tool::RNA:       { return rna();       }
-        case Tool::Meta:      { return meta();      }
-        case Tool::Norm:      { return norm();      }
-        case Tool::Split:     { return split();     }
-        case Tool::Somatic:   { return somatic();   }
-        case Tool::Germline:  { return germline();  }
-        case Tool::Calibrate: { return calibrate(); }
-        case Tool::BroadBAM:  { return broadBAM();  }
-        case Tool::BroadVCF:  { return broadVCF();  }
-        default:              { return "";          }
-    }
-}
-
-inline std::string option(const Option &key, const Scripts &x = "")
-{
-    return _p.opts.count(key) ? _p.opts[key] : x;
-}
-
-template <typename F> std::shared_ptr<Ladder> readL(F f, Option key, UserReference &, const Scripts &x = "")
-{
-    return _p.opts.count(key) ? std::shared_ptr<Ladder>(new Ladder(f(Reader(_p.opts[key])))) :
-                                std::shared_ptr<Ladder>(new Ladder(f(Reader(x))));
-}
-
-static std::shared_ptr<VCFLadder> readV(Option opt, UserReference &, std::shared_ptr<BedData> rb, const FileName &def)
-{
-    auto rr = (_p.opts.count(opt)) ? Reader(_p.opts[opt]) : Reader(def);
-    return std::shared_ptr<VCFLadder>(new VCFLadder(Standard::addVCF(rr, rb)));
-}
-
-static std::shared_ptr<VCFLadder> readGV(Option opt, UserReference &, std::shared_ptr<BedData> rb, const FileName &def)
-{
-    auto rr = (_p.opts.count(opt)) ? Reader(_p.opts[opt]) : Reader(def);
-    return std::shared_ptr<VCFLadder>(new VCFLadder(Standard::addGVCF(rr, rb)));
-}
-
-static std::shared_ptr<VCFLadder> readSV(Option opt, UserReference &, std::shared_ptr<BedData> rb, const FileName &def)
-{
-    auto rr = (_p.opts.count(opt)) ? Reader(_p.opts[opt]) : Reader(def);
-    return std::shared_ptr<VCFLadder>(new VCFLadder(Standard::addSVCF(rr, rb)));
-}
-
-static std::shared_ptr<BedData> readR(const FileName &file, const RegionOptions &o = RegionOptions())
-{
-    return std::shared_ptr<BedData>(new BedData(Standard::readBED(Reader(file), o)));
-}
-
-static WriterOptions *__o__;
-
-void info(const std::string &s) { if (__o__) { __o__->info(s); } }
-void wait(const std::string &s) { if (__o__) { __o__->wait(s); } }
-
-template <typename Analyzer, typename O, typename F> void start(const std::string &name, F f, O &o)
-{
-    o.info("-----------------------------------------");
-    o.info("------------- Sequin Analysis -----------");
-    o.info("-----------------------------------------");
-
-    const auto path = _p.path;
-
-    // Required for logging
-    __o__ = &o;
-
-    o.output = __outputW__;
-    o.logger = __loggerW__;
-    o.writer = std::shared_ptr<FileWriter>(new FileWriter(path));
-    
-    if (system(("mkdir -p " + path).c_str()))
-    {
-        throw std::runtime_error("Failed to create output directory");
-    }
-    
-    o.name = name;
-    o.debug = _p.opts.count(OPT_DEBUG);
-    o.cmd = __full_command__ = _p.cmd;
-    o.work = path;
-    o.version = version();
-    
-    assert(!o.cmd.empty());
-    assert(!o.name.empty());
-    assert(!o.work.empty());
-
-    o.info("Version: " + version());
-    o.info(_p.cmd);
-    o.info(date());
-    o.info("Path: " + path);
-    o.info("Resources: " + _p.opts[OPT_RESOURCE]);
-
-    using namespace std::chrono;
-    
-    auto begin = high_resolution_clock::now();
-
-    f(o);
-    
-    auto end = high_resolution_clock::now();
-
-    // Remove all working directories
-    clearAllTmp();
-    
-    const auto elapsed = (boost::format("Completed. %1% seconds.") % duration_cast<seconds>(end - begin).count()).str();
-    o.info(elapsed);
-
-    o.logger->close();
-}
-
-template <typename Analyzer> void analyze_1(const std::string &p, Option x, typename Analyzer::Options &o = typename Analyzer::Options())
-{
-    return start<Analyzer>(p, [&](const typename Analyzer::Options &o)
-    {
-        Analyzer::report(_p.opts.at(x), o);
-    }, o);
-}
-
-template <typename Analyzer> void analyze_2(const std::string &p, Option x1, Option x2, typename Analyzer::Options &o = typename Analyzer::Options())
-{
-    return start<Analyzer>(p, [&](const typename Analyzer::Options &o)
-    {
-        Analyzer::report(_p.opts.count(x1) ? _p.opts[x1] : "", _p.opts.count(x2) ? _p.opts[x2] : "", o);
-    }, o);
-}
-
-template <typename T> std::shared_ptr<Ladder> readTSV(const Reader &r, T &, int con = 1)
-{
-    Ladder l = Ladder();
-    
-    ParserCSV::parse(r, [&](const ParserCSV::Data &x, Progress)
-    {
-        if (x.size() < 2)
-        {
-            throw std::runtime_error("Invalid format. Two or more columns expected");
-        }
-        else if (x[con] == MISSING || !isNumber(x[con]))
-        {
-            return;
-        }
-        
-        l.add(x[0], Mix_1, stof(x[con]));
-    }, "\t");
-
-    return std::shared_ptr<Ladder>(new Ladder(l));
-}
-
-void parse(int argc, char ** argv)
-{
-    auto tmp = new char*[argc+1];
-    
-    for (auto i = 0; i < argc; i++)
-    {
-        tmp[i] = (char *) malloc((strlen(argv[i]) + 1) * sizeof(char));
-        strcpy(tmp[i], argv[i]);
-    }
-    
-    _p = Parsing();
-
-    if ((argc <= 1) || (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help")))
-    {
-        printUsage();
         return;
     }
 
-    // Required for unit-testing
-    optind = 1;
-
-    /*
-     * Reconstruct the overall command
-     */
+    const auto f = "%1%\t%2%\t%3%\t%4%\t%5%\t%6%\t%7%\t%8%\t%9%";
     
-    for (auto i = 0; i < argc; i++)
+    o.generate(tsvL);
+    o.writer->open(tsvL);
+    o.writer->write((boost::format(f) % "NAME"
+                                      % "SEQUIN"
+                                      % "STANDARD"
+                                      % "STOICHOMETRY"
+                                      % "COPY"
+                                      % "READ"
+                                      % "MIN"
+                                      % "MEAN"
+                                      % "MAX").str());
+    
+    auto r1 = o.r1.inters();
+
+    for (auto &i : r1)
     {
-        _p.cmd += std::string(argv[i]) + " ";
+        for (auto &j : i.second.data())
+        {
+            const auto &name = j.second.id();
+            
+            if (!isSubstr(name, "_LD"))
+            {
+                continue;
+            }
+            
+            // Synthetic doesn't need any calibration. No need for r.after.
+            const auto stats = r.decoy.r1.find(name)->stats();
+            
+            o.writer->write((boost::format(f) % name
+                                              % noLast(name, "_")
+                                              % GSeq2Std(noLast(name, "_"))
+                                              % 1
+                                              % S0(o.l3->input(noLast(name, "_")))
+                                              % stats.n
+                                              % stats.min
+                                              % stats.mean
+                                              % stats.max).str());
+        }
     }
 
-    assert(!_p.cmd.empty());
+    o.writer->close();
+}
 
-    int next, index;
-
-    auto checkPath = [&](const Path &path)
+void GDecoyResults::writeV(const GDecoyResults &r, const GDecoyOptions &o)
+{
+    if (o.tsvA.empty())
     {
-        if (path[0] == '/')
+        return;
+    }
+
+    o.generate(o.tsvA);
+    o.writer->open(o.tsvA);
+
+    const auto f = "%1%\t%2%\t%3%\t%4%\t%5%\t%6%\t%7%\t%8%\t%9%\t%10%\t%11%";
+    o.writer->write("NAME\tLABEL\tCHROM\tPOSITION\tEXP_FREQ\tOBS_FREQ_CALIB\tREF_COUNT_CALIB\tVAR_COUNT_CALIB\tOBS_FREQ\tREF_COUNT\tVAR_COUNT");
+
+    for (auto &i : o.v1->data.vars())
+    {
+        if (i.gt == Genotype::MSI)
         {
-            return path;
+            continue;
+        }        
+        else if (r.bAF.find(noPID(i.name)))
+        {
+            const auto X1 = r.bAF.find(noPID(i.name));
+            const auto X2 = r.aAF.find(noPID(i.name));
+
+            const auto &R1 = X1 ? X1->R : 0;
+            const auto &V1 = X1 ? X1->V : 0;
+            const auto &R2 = X2 ? X2->R : 0;
+            const auto &V2 = X2 ? X2->V : 0;
+
+            o.writer->write((boost::format(f) % i.name
+                                              % bin2Label(GBin(i.name))
+                                              % i.cID
+                                              % i.l.start
+                                              % S6(o.l1->input(i.name))
+                                              % replaceNA((Proportion) V2 / (R2+V2), 6)
+                                              % R2
+                                              % V2
+                                              % replaceNA((Proportion) V1 / (R1+V1), 6)
+                                              % R1
+                                              % V1).str());
+        }
+    }
+    
+    o.writer->close();
+}
+
+static void calibrateBAM(const FileName &src,
+                         const FileName &dst,
+                         GDecoyResults::SingleCalibrate &c,
+                         const GDecoyOptions &o)
+{
+    assert(c.p >= 0.0 && c.p <= 1.0);
+    c.after = 0;
+    auto r = std::shared_ptr<RandomSelection>(new RandomSelection(1.0 - c.p));
+    
+    BAMWriter w;
+    w.open(dst);
+    
+    ParserBAM::parse(src, [&](ParserBAM::Data &x, const ParserBAM::Info &i)
+    {
+        if (i.p && !(i.p % 1000000)) { o.logInfo(S0(i.p)); }
+        if (i.p == 0) { w.writeH(x); }
+        x.lName();
+
+        if (r->select(x.name))
+        {
+            c.after++;
+            w.write(x);
+            return Response::OK;
+        }
+        
+        return Response::SKIP_EVERYTHING;
+    });
+    
+    w.close();
+}
+
+static void calibrateBAM(const FileName &src,
+                         const FileName &dst,
+                         const Norms &norms,
+                         const GDecoyOptions &o)
+{
+    typedef std::map<SequinID, std::shared_ptr<RandomSelection>> Selection;
+    
+    Selection select;
+    
+    auto r1 = o.r1.inters();
+    auto r2 = o.r2.inters();
+    
+    for (const auto &i : norms)
+    {
+        // Guard against no sequin coverage
+        const auto p = std::isnan(i.second) ? 1.0 : i.second;
+        
+        assert(p >= 0 && p <= 1.0 && !std::isnan(p));
+        
+        // Create independent random generator for each calibration region
+        select[i.first] = std::shared_ptr<RandomSelection>(new RandomSelection(1.0 - p));
+    }
+    
+    assert(select.size() == norms.size());
+    
+    BAMWriter w;
+    w.open(dst);
+
+    ParserBAMBED::parse(src, r1, [&](ParserBAM::Data &x, const ParserBAM::Info &i, const DInter *)
+    {
+        if (i.p && !(i.p % 1000000)) { o.logInfo(S0(i.p)); }
+        if (i.p == 0) { w.writeH(x); }
+        
+        x.lName();
+        
+        auto mustKept = !x.mapped || x.isDuplicate;
+        
+        if (!mustKept)
+        {
+            DInter *inter = nullptr;
+            
+            /*
+             * Should that be contains or overlap? We prefer overlaps because any read that is overlapped
+             * into the regions still give valuable information and sequencing depth.
+             */
+            
+            if (r1.count(x.cID) && (inter = r1.at(x.cID).overlap(x.l)))
+            {
+                // Calibrate both paired-ends because they have the same name
+                if (!select.count(inter->name()) || select.at(inter->name())->select(x.name))
+                {
+                    mustKept = true;
+                }
+            }
+            else
+            {
+                // Never throw away reads outside the regions
+                mustKept = true;
+            }
+        }
+        
+        if (mustKept)
+        {
+            w.write(x);
+            
+            if (r2.count(x.cID) && r2.at(x.cID).overlap(x.l) && !x.isDuplicate)
+            {
+                r2.at(x.cID).overlap(x.l)->map(x.l);
+            }
+            
+            return Response::OK;
+        }
+        
+        return Response::SKIP_EVERYTHING;
+    });
+    
+    w.close();
+}
+
+std::map<SequinID, GDecoyResults::VariantData> GDecoyResults::buildAF(const DecoyAnalyzer::Results::Metrics &x, bool isChrQ)
+{
+    const auto &r = Standard::instance().gen;
+    std::map<SequinID, GDecoyResults::VariantData> mm;
+    
+    auto r2 = r.r2()->inters();
+    
+    for (auto &v : (isChrQ ? r.v4() : r.v1())->data.vars())
+    {
+        const auto std = GSeq2Std(v.name);
+        
+        // Relative to chrQ or hg38
+        auto start = v.l.start - 1; // 0-based
+        
+        // Convert from hg38 to sequin relative
+        if (!isChrQ)
+        {
+            auto a = r2.find(noLast(noPID(v.name), "_"), false);
+            assert(a);
+            start -= (a->l().start - 1);
+        }
+
+        switch (v.type())
+        {
+            case Variation::SNP:
+            {
+                auto f1 = [&](const MData &x)
+                {
+                    if (!x.count(std) || !x.at(std).count(start))
+                    {
+                        return (Count) 0;
+                    }
+                    
+                    return x.at(std).at(start);
+                };
+                
+                auto f2 = [&](const DecoyAnalyzer::SData &x)
+                {
+                    if (!x.count(std) || !x.at(std).count(start) || !x.at(std).at(start).count(v.snpType()))
+                    {
+                        return (Count) 0;
+                    }
+                    
+                    return x.at(std).at(start).at(v.snpType());
+                };
+                
+                if (x.sd.count("All"))
+                {
+                    mm[v.name].R = f1(x.sd.at("All").match);
+                    mm[v.name].V = f2(x.sd.at("All").snps);
+                }
+
+                break;
+            }
+                
+            case Variation::Deletion:
+            case Variation::Insertion:
+            {
+                auto f1 = [&](const MData &x, Base base)
+                {
+                    if (!x.count(std) || !x.at(std).count(base))
+                    {
+                        return (Count) 0;
+                    }
+                    
+                    return x.at(std).at(base);
+                };
+                
+                auto f2 = [&](const IDData &x, Base base)
+                {
+                    if (!x.count(std) || !x.at(std).count(base))
+                    {
+                        return (Count) 0;
+                    }
+                    
+                    return sum(x.at(std).at(base));
+                };
+                
+                // AF for insertion
+                auto I = [&](const MData &d1, const IDData &d2)
+                {
+                    // Number of insertions is simply the number reported in CIGAR
+                    const auto V = f2(d2, v.l.start);
+
+                    /*
+                       * Inserted sequences are not in the reference, but we can infer the
+                       * number of references by subtracing all reads by inserted reads. Note
+                       * each inserted read is also a contribution to the total reads.
+                       */
+                    
+                    const auto R1 = f1(d1, v.l.start);
+                    const auto R2 = R1 - V;
+                    
+                    return std::pair<Coverage, Coverage>(f1(d1, v.l.start) - V, V);
+                };
+
+                // AF for Deletion
+                auto D = [&](const MData &d1, const IDData &d2)
+                {
+                    // Number of deletions is simply the number reported in CIGAR
+                    const auto V = f2(d2, v.l.start);
+
+                    /*
+                       * When we say deletion, we mean something like "TGTC" to "T".
+                       * The actual sequences being deleted is "G" not "T".
+                       */
+                    
+                    const auto R = f1(d1, v.l.start + 1);
+                    
+                    return std::pair<Coverage, Coverage>(R, V);
+                };
+
+                if (x.sd.count("All"))
+                {
+                    const auto b = v.type() == Variation::Deletion ? D(x.sd.at("All").match,
+                                                                       x.sd.at("All").dls) :
+                                                                     I(x.sd.at("All").match,
+                                                                       x.sd.at("All").ins);
+                    mm[v.name].R = b.first;
+                    mm[v.name].V = b.second;
+                }
+
+                break;
+            }
+                
+            default:
+            {
+                throw std::runtime_error("Only short mutations are supported");
+            }
+        }
+    }
+    
+    return mm;
+}
+
+template <typename T> Coverage getLocalCoverage(const T &x, CalibrateMethod m)
+{
+    switch (m)
+    {
+        case CalibrateMethod::Mean:
+        case CalibrateMethod::Percent: { return x.mean; }
+        case CalibrateMethod::Median:  { return x.p50; }
+        default: { throw std::runtime_error("Only local coverage methods supported"); }
+    }
+}
+
+Coverage Anaquin::meanSamp(const FileName &file, const Label &key)
+{
+    const auto tmp = tmpFile();
+    RGrep(file, tmp, "CHROM", key);
+    return RMean(tmp, "SAMPLE_COVERAGE");
+}
+
+GDecoyOptions GDecoyOptions::create(const FileName &index, const AnalyzerOptions &o)
+{
+    GDecoyOptions tmp;
+
+    if (o.debug) { tmp.work = o.work;    } // Always write to working directory if debug
+    else         { tmp.work = tmpPath(); }
+
+    tmp.edge = 550;
+    tmp.showGen = false;
+    tmp.logger  = o.logger;
+    tmp.output  = o.output;
+    tmp.writer = std::shared_ptr<Writer<>>(new FileWriter(tmp.work));
+
+    const auto &r = Standard::instance().gen;
+    tmp.h1 = *(r.r1()); tmp.h2 = *(r.r3());
+    tmp.r1 = *(r.r2()); tmp.r2 = *(r.r4());
+    tmp.attr = *(r.r5());
+
+    tmp.l1 = r.l1();
+    tmp.l3 = r.l3();
+    tmp.v1 = r.v4();
+    tmp.a3 = r.a3();
+
+    tmp.index = index;
+    tmp.errors.insert(GDecoyChrQS);
+
+    return tmp;
+}
+
+GDecoyOptions GDecoyOptions::create(const FileName &writeS,
+                                    const FileName &writeD,
+                                    const FileName &writeM,
+                                    const FileName &writeT,
+                                    const FileName &writeL1,
+                                    const FileName &writeL2,
+                                    const FileName &calibF,
+                                    const FileName &tsvE,
+                                    const FileName &tsvR,
+                                    const FileName &tsvF,
+                                    const FileName &tsvA,
+                                    const FileName &tsvL1,
+                                    const FileName &tsvL2,
+                                    const FileName &index,
+                                    Proportion seqC,
+                                    Proportion ladC,
+                                    const AnalyzerOptions &o)
+{
+    GDecoyOptions o2;
+
+    if (o.debug) { o2.work = o.work;    } // Always write to working directory if debug
+    else         { o2.work = tmpPath(); }
+
+    o2.seqC    = seqC;
+    o2.ladC    = ladC;
+    o2.writer  = o.writer;
+    o2.logger  = o.logger;
+    o2.output  = o.output;
+    o2.showGen = false;
+
+    o2.writeS  = writeS;
+    o2.writeD  = writeD;
+    o2.writeM  = writeM;
+    o2.writeT  = writeT;
+    o2.writeMC = calibF;
+    o2.writeL1 = writeL1;
+    o2.writeL2 = writeL2;
+
+    o2.tsvE  = tsvE;
+    o2.tsvR  = tsvR;
+    o2.tsvF  = tsvF;
+    o2.tsvA  = tsvA;
+    o2.tsvL1 = tsvL1;
+    o2.tsvL2 = tsvL2;
+
+    const auto &r = Standard::instance().gen;
+
+    o2.l1   = r.l1();
+    o2.l3   = r.l3();
+    o2.v1   = r.v4();
+    o2.a3   = r.a3();
+    o2.edge = 550;
+
+    o2.h1 = *(r.r1()); o2.h2 = *(r.r3());
+    o2.r1 = *(r.r2()); o2.r2 = *(r.r4());
+    o2.attr = *(r.r5());
+
+    o2.index = index;
+    o2.writer = std::shared_ptr<Writer<>>(new FileWriter(o2.work));
+    o2.errors.insert(GDecoyChrQS);
+
+    return o2;
+}
+
+GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, const GDecoyOptions &_o_, G1 g1, G2 g2)
+{
+    assert(!_o_.writeL1.empty() && !_o_.inputL2.empty());
+    
+    // Either decoy calibration or sample/sequin calibration or nothing
+    assert(!(_o_.seqC != NO_CALIBRATION && !_o_.writeMC.empty()));
+
+    GDecoyResults r;
+    
+    const auto twoBAM = !f2.empty();
+    
+    auto o = _o_; o.showGen = _o_.showGen;
+    const auto isChrQ = f2.empty();
+    const auto writeD = !o.writeD.empty() ? o.writeD : tmpFile(); // Always required (all decoy reads)
+    const auto writeT = !o.writeT.empty() ? o.writeT : tmpFile(); // Always required (only trimmed decoy reads)
+    
+    if (o.seqs.empty())
+    {
+        ParserFA::parse(Reader(o.index), [&](const ParserFA::Data &x)
+        {
+            auto seq = x.seq;
+            
+            if (!isChrQ)
+            {
+                switch (GBin(x.id))
+                {
+                    case Bin::GR:
+                    case Bin::SO:
+                    {
+                        seq = reverse(seq); // Sequins on hg19/hg38 are reversed
+                        break;
+                    }
+                        
+                    default: { break; }
+                }
+            }
+            
+            o.seqs[x.id] = seq;
+        });
+    }
+    
+    Count nLad = 0;
+    auto ld = std::shared_ptr<BAMWriter>(new BAMWriter()); ld->open(_o_.writeL1);
+
+    assert(!o.seqs.empty());
+    logRun([&]()
+    {
+        DecoyAnalyzer::Options tmp = o; tmp.writeD = writeD; tmp.writeT = writeT;
+        assert(tmp.seqC == o.seqC);
+        
+        r.B1 = DecoyAnalyzer::analyze(f1, f2, tmp, [&](const ParserBAM::Data &x,
+                                                       const DInter *r1,
+                                                       const DInter *r2,
+                                                       bool trimmed)
+        {
+            g1(GDecoyStatus::Before, x, r1, r2, trimmed);
+            if (x.cID == GDecoyChrQL && !trimmed) { nLad++; ld->write(x); }
+        }); ld->close(); g2(GDecoyStatus::Before);
+    }, o, "Started initial analysis", "Completed initial analysis");
+
+    r.lib    = r.B1.bamLib; // Library diagnostic
+    r.samp   = r.B1.samp;   // Sampling diagnostic
+    r.before = r.B1.decoy;  // Decoy diagnostic
+
+    // Ladder before calibration
+    GDecoyResults::writeL(o.tsvL1, r.B1, o);
+    
+    o.tsvL1NotMerged = "notMerged.tsv";
+    mv(o.work + "/" + o.tsvL1, o.work + "/" + o.tsvL1NotMerged);
+    
+    // TODO: ???? o.tsvL2 = "notMerged.tsv";
+    // TODO: ???? mv(o.work + "/" + o.tsvL1, o.work + "/" + o.tsvL2);
+    
+    // Note writeL() writes out to like "S0015_LD_016_D_1", "S0015_LD_016_D_2". Let's combine.
+    mergeL(o.work + "/" + o.tsvL1NotMerged, o.work + "/" + o.tsvL1);
+    
+    // We'll do again, but this is needed for calculating sample coverage
+    GDecoyResults::writeR(r, o);
+    
+    /*
+     * Ladder calibration
+     */
+    
+    typedef LadderCalibrator::Options::SampleCNV2Data SampleCNV2Data;
+    LadderCalibrator::Options o_;
+    
+    o_.d1 = std::shared_ptr<SampleCNV2Data>(new SampleCNV2Data());
+    o_.r1 = o.r1;
+    o_.d1->tsvL = o.work + "/" + o.tsvL1NotMerged; // Unmerged for calibration
+    o_.d1->sampC = meanSamp(o.work + "/" + o.tsvR, f2.empty() ? "chrQS" : "chr");
+
+    o_.logger = o.logger;
+    o_.output = o.output;
+    o_.writer = o.writer;
+    o.info("Sampling coverage for ladder calibration: " + std::to_string(o_.d1->sampC));
+    
+    const auto writeL2 = _o_.writeL2.empty() ? tmpFile() : _o_.writeL2;
+
+    if (o.ladC == NO_CALIBRATION)
+    {
+        logRun([&]()
+        {
+            LadderCalibrator::createBAM(_o_.inputL2, writeL2)->calibrate(o_);
+        }, o, "Started ladder calibration", "Completed ladder calibration");
+    }
+    else if (o.ladC <= 1.0)
+    {
+        LadderCalibrator::Options o_;
+        
+        o_.d2 = std::shared_ptr<PoolData>(new PoolData());
+        o_.d2->p = o.ladC; // How much to calibrate
+        o_.d2->tsvL = o.work + "/" + o.tsvL1NotMerged;
+        o_.r1 = o.r1;
+        o_.meth = Method::Pooling;
+        o_.logger = o.logger;
+        o_.output = o.output;
+        o_.writer = o.writer;
+
+        logRun([&]()
+        {
+            assert(!o_.d2->tsvL.empty());
+            LadderCalibrator::createBAM(_o_.inputL2, writeL2)->calibrate(o_);
+        }, o, "Started synthetic ladder calibration", "Completed synthetic ladder calibration");
+    }
+    else
+    {
+        const auto bSeq = nLad;
+        
+        // Number of target sequin reads after calibration
+        const auto tar = bSeq < o.ladC ? bSeq : o.ladC;
+
+        // Scaling factor for calibration
+        const auto p = bSeq ? (Proportion) tar / bSeq : 0.0;
+
+        o.logInfo("Ladder reads before calibration: " + std::to_string(bSeq));
+        o.logInfo("Target: " + std::to_string(tar));
+        o.logInfo("Scaling factor: " + std::to_string(p));
+
+        // Calibrate and return the number of reads after calibration
+        SelectionCalibrator::createBAM(_o_.inputL2, writeL2)->calibrate(p, o);
+    }
+
+    // Before calibration, but after synthetic ladder normalization
+    GDecoyOptions ol = o; ol.showGen = o.showGen;
+    
+    if (!writeL2.empty())
+    {
+        logRun([&]()
+        {
+            // Don't override what we've already done
+            ol.writeS = ol.writeD = ol.writeT = ol.writeM = ""; ol.seqC = NO_CALIBRATION;
+
+            // Analyze for ladder calibration
+            r.B2 = DecoyAnalyzer::analyze(writeL2, "", ol, [&](const ParserBAM::Data &x, const DInter *r1, const DInter *r2, bool trimmed){
+                g1(GDecoyStatus::AfterLC, x, r1, r2, trimmed);
+            }); g2(GDecoyStatus::AfterLC);
+        }, o, "Started analysis on post-ladder normalization",
+              "Completed analysis on post-ladder normalization");
+    }
+
+    /*
+     * Sequin calibration
+     */
+
+    auto getNormFactors = [&]()
+    {
+        o.info("Calculating normalisation factors");
+        const auto inters = o.r1.inters();
+
+        if (o.seqC == NO_CALIBRATION)
+        {
+            /*
+             * Calibration by region to region
+             */
+            
+            // Global statistics for the entire sample
+            const auto samp = r.samp.r2.stats();
+            
+            if (o.debug)
+            {
+                for (auto &i : samp.raws)
+                {
+                    o.logInfo("[DEBUG]: " + std::to_string(i));
+                }
+
+                o.logInfo("Inside getNormFactors(). sample.mean = " + std::to_string(samp.mean));
+                o.logInfo("Inside getNormFactors(). sample.median = " + std::to_string(samp.p50));
+            }
+                        
+            for (auto &i : inters)
+            {
+                if (isChrQ && i.first != GDecoyChrQS)
+                {
+                    continue;
+                }
+                
+                for (auto &j : i.second.data())
+                {
+                    const auto &name = j.second.id();
+                    
+                    const auto before = r.before.r2.find(name);
+                    
+                    const auto useGlobal = o.meth == CalibrateMethod::SampleMedian ||
+                                           o.meth == CalibrateMethod::SampleMean;
+                    
+                    // Sample coverage (local or global)
+                    const auto samC = o.meth == CalibrateMethod::SampleMedian ? samp.p50  :
+                                      o.meth == CalibrateMethod::SampleMean   ? samp.mean :
+                                      getLocalCoverage(r.samp.r2.find(name)->stats(), o.meth);
+                    
+                    if (o.debug)
+                    {
+                        o.logInfo("Sample: " + std::to_string(samC) + " for " + name);
+                    }
+                    
+                    // Local calibration method for sequins (SampleMedian is only for calculating sample coverage)
+                    const auto m2 = useGlobal ? CalibrateMethod::Mean : o.meth;
+                    
+                    // Sequin coverage
+                    const auto seqC = before ? getLocalCoverage(r.before.r2.find(name)->stats(), m2) : NAN;
+                    
+                    // Calibrate by sample coverage
+                    r.c1.norms[name] = seqC ? std::min(samC / seqC, 1.0) : NAN;
+                }
+            }
+            
+            assert(!r.c1.norms.empty());
+        }
+        else if (o.seqC > 1.0)
+        {
+            // What's the number of sequin reads to chrQS before calibration?
+            auto sum = 0;
+            
+            for (auto &i : inters.at(GDecoyChrQS).data())
+            {
+                sum += r.before.r2.find(i.second.id())->stats().n;
+            }
+
+            const auto tar = o.seqC > sum ? sum : o.seqC;
+            r.c2.p = sum ? tar / sum : 0.0;
+            
+            o.info("Target: "  + S0(tar));
+            o.info("Scaling: " + S4(r.c2.p));
         }
         else
         {
-            return __working__ + "/" + path;
-        }
-    };
-    
-    auto checkBundle = [&](const Path &path)
-    {
-        if (!exists(path))
-        {
-            throw MissingBundleError(path);
-        }
-        
-        const auto files = listFiles(path);
-        
-        auto check = [&](const FileName &x)
-        {
-            if (std::find_if(files.begin(), files.end(), [&](const FileName &i) {
-                return isBegin(i, x);
-            }) == files.end()) { throw InvalidBundleError(x); }
-        };
-        
-        check("genome");
-        check("synthetic");
-        check("metagenome");
-        check("transcriptome");
-
-        return path;
-    };
-
-    auto checkFile = [&](const FileName &file)
-    {
-        if (!std::ifstream(file).good())
-        {
-            throw InvalidFileError(file);
-        }
-        
-        return file;
-    };
-
-    /*
-     * Pre-process arguments. This way, we can examine the options in whatever order we'd like to
-     */
-
-    std::vector<Value>  vals;
-    std::vector<Option> opts;
-
-    if (strcmp(argv[1], "-v") == 0)
-    {
-        std::cout << version() << std::endl;
-        return;
-    }
-    else if (strcmp(argv[1], "-t") == 0)
-    {
-#ifdef UNIT_TEST
-        Catch::Session().run(1, argv);
-#else
-        A_THROW("UNIT_TEST is undefined");
-#endif
-        return;
-    }
-    else if (!_tools.count(argv[1]))
-    {
-        throw InvalidToolError(argv[1]);
-    }
-
-    _p.tool = _tools[argv[1]];
-    const auto isHelp = argc >= 3 && (!strcmp(argv[2], "-h") || !strcmp(argv[2], "--help"));
-
-    if (isHelp)
-    {
-        if (argc != 3)
-        {
-            throw std::runtime_error("Too many arguments for help usage. Usage: anaquin <tool> -h or anaquin <tool> --help");
-        }
-
-        std::cout << std::endl << fixManual(manual(_p.tool)) << std::endl << std::endl;
-        return;
-    }
-    
-    unsigned n = 2;
-
-    while ((next = getopt_long_only(argc, argv, short_opts, long_opts, &index)) != -1)
-    {
-        if (next < OPT_TOOL)
-        {
-            throw InvalidOptionException(argv[n]);
-        }
-        
-        opts.push_back(next);
-        
-        // Whether this option has an value
-        const auto hasValue = optarg;
-        
-        n += hasValue ? 2 : 1;
-        
-        vals.push_back(hasValue ? std::string(optarg) : "");
-    }
-
-    for (auto i = 0u; i < opts.size(); i++)
-    {
-        auto opt = opts[i];
-        auto val = vals[i];
-
-        switch (opt)
-        {
-            case OPT_RULE:
-            {
-                try
-                {
-                    stof(val);
-                    _p.opts[opt] = val;
-                }
-                catch (...)
-                {
-                    throw std::runtime_error(val + " is not an. Please check and try again.");
-                }
-                
-                break;
-            }
-
-            case OPT_CALIB:
-            case OPT_LCALIB:
-            {
-                try
-                {
-                    _p.od[opt] = stod(val);
-                }
-                catch (...)
-                {
-                    throw std::runtime_error(val + " is not a floating number");
-                }
-
-                break;
-            }
-                
-            case OPT_EDGE:
-            case OPT_KMER:
-            case OPT_SKIP:
-			case OPT_WINDOW:
-            {
-                try
-                {
-                    stoi(val);
-                    _p.opts[opt] = val;
-                }
-                catch (...)
-                {
-                    throw std::runtime_error(val + " is not an integer. Please check and try again.");
-                }
-
-                break;
-            }
-
-            case OPT_METHOD:
-            {
-                switch (_p.tool)
-                {
-                    case Tool::Somatic:
-                    case Tool::Germline:
-                    case Tool::Calibrate: { _p.opts[opt] = val; break; }
-                    default : { throw InvalidOptionException("Invalid usage for --method"); }
-                }
-                
-                break;
-            }
-
-            case OPT_FASTQ:
-            case OPT_FASTA:
-            case OPT_BUILD:
-            case OPT_DEBUG:
-            case OPT_MERGE:
-            case OPT_THREAD:
-            case OPT_ONLY_S:
-            case OPT_ONLY_D:
-            case OPT_ONLY_C:
-            {
-                _p.opts[opt] = val;
-                break;
-            }
-
-            case OPT_MIXTURE:
-            {
-                if      (val == "A") { _p.mix = Mixture::Mix_1; }
-                else if (val == "B") { _p.mix = Mixture::Mix_2; }
-                else if (val == "C") { _p.mix = Mixture::Mix_3; }
-                else                 { throw InvalidValueException("-mix", val); }
-                break;
-            }
-
-            case OPT_1:
-            case OPT_2:
-            case OPT_3:
-            case OPT_4:
-            case OPT_A1:
-            case OPT_A2:
-            case OPT_B1:
-            case OPT_B2:
-            case OPT_C1:
-            case OPT_C2:
-            case OPT_D1:
-            case OPT_D2:
-            case OPT_E1:
-            case OPT_E2:
-            case OPT_VCF:
-            case OPT_SAMPLE:
-            case OPT_SEQUIN:                
-            case OPT_COMBINE: { checkFile(_p.opts[opt] = val); break; }
-
-            case OPT_RESOURCE: { checkBundle(_p.opts[opt] = val); break; }
-                
-            case OPT_MMIX:
-            case OPT_R_VCF:
-            case OPT_R_BED:
-            case OPT_R_REGS:
-            case OPT_R_HUMAN:
-            case OPT_R_DECOY:
-            {
-                checkFile(_p.opts[opt] = val);
-                break;
-            }
-
-            case OPT_PATH: { _p.path = val; break; }
-
-            default: { throw InvalidUsageException(); }
-        }
-    }
-    
-    if (!_p.opts.count(OPT_RESOURCE))
-    {
-        _p.opts[OPT_RESOURCE] = checkBundle(execPath() + "/resources");
-    }
-
-    __output__ = _p.path = checkPath(_p.path);
-    
-    if (opts.empty())
-    {
-        std::cout << std::endl << fixManual(manual(_p.tool)) << std::endl << std::endl;
-        return;
-    }
-    
-    UserReference r;
-    
-    auto &s = Standard::instance();
-    
-    __loggerW__ = std::shared_ptr<FileWriter>(new FileWriter(_p.path));
-    __outputW__ = std::shared_ptr<TerminalWriter>(new TerminalWriter());
-    __loggerW__->open("anaquin.log");
-    
-    #define GSFA()         (GSeqFA(_p.opts.at(OPT_RESOURCE)).path)
-    #define GDFA()         (GSeqDecoy(_p.opts.at(OPT_RESOURCE)).path)
-    #define GFeatBED_(x)   (GFeatBED(_p.opts.at(OPT_RESOURCE), x).path)
-    #define GLTSV(x)       (GSynTSV(_p.opts.at(OPT_RESOURCE)).path)
-    #define GAttrBED_(x)   (GAttrBED(_p.opts.at(OPT_RESOURCE)).path)
-    #define GRegionBED_(x) (GRegionBED(_p.opts.at(OPT_RESOURCE), x).path)
-    #define GVCF(x)        (GVarVCF(_p.opts.at(OPT_RESOURCE), x).path)
-    #define RSFA()         (RNAFA(_p.opts.at(OPT_RESOURCE)).path)
-    #define RDFA()         (RNADecoy(_p.opts.at(OPT_RESOURCE)).path)
-
-    auto initAR = [&](UserReference &r)
-    {
-        const auto a1 = readAttrib(GFeatBED_(Build::hseq));
-        const auto a2 = readAttrib(GFeatBED_(Build::hg38));
-        const auto a3 = readAttrib(GFeatBED_(Build::chrQ));
-
-        r.a1 = std::shared_ptr<AttributeBed>(new AttributeBed(a1));
-        r.a2 = std::shared_ptr<AttributeBed>(new AttributeBed(a2));
-        r.a3 = std::shared_ptr<AttributeBed>(new AttributeBed(a3));
-    };
-
-    const auto rpath = _p.opts.at(OPT_RESOURCE);
-    
-    switch (_p.tool)
-    {
-        case Tool::RNA:
-        case Tool::TMM:
-        case Tool::Meta:
-        case Tool::Norm:
-        case Tool::Split:
-        case Tool::Somatic:
-        case Tool::Germline:
-        case Tool::BroadBAM:
-        case Tool::BroadVCF:
-        case Tool::Calibrate:
-        {
-            switch (_p.tool)
-            {
-                case Tool::Split:
-                case Tool::BroadBAM:
-                case Tool::Calibrate:
-                {
-                    const auto edge  = _p.opts.count(OPT_EDGE)   ? stoi(_p.opts[OPT_EDGE]) : DEFAULT_EDGE;
-                    const auto build = _p.opts.count(OPT_BUILD) ? parseBuild(_p.opts.at(OPT_BUILD)) :  (_p.opts.count(OPT_COMBINE) ? Detector::fromBAM(_p.opts.at(OPT_COMBINE)) : Build::hg38);
-                    
-                    const auto bothHR = _p.opts.count(OPT_SAMPLE) && _p.opts.count(OPT_SEQUIN);
-                    
-                    const auto hr = _p.opts.count(OPT_R_HUMAN) ? _p.opts[OPT_R_HUMAN] : GRegionBED_(build);
-                    const auto dr = _p.opts.count(OPT_R_DECOY) ? _p.opts[OPT_R_DECOY] : !bothHR ? GRegionBED_(Build::chrQ) : GRegionBED_(build);
-                    const auto rr = _p.opts.count(OPT_R_REGS)  ? _p.opts[OPT_R_REGS]  : dr;
-                    
-                    if (dr == rr)
-                    {
-                        RegionOptions o;
-                        r.r1 = readR(hr, o); // No trimming
-                        r.r2 = readR(dr, o); // No trimming
-                        
-                        o.edge = edge;
-                        r.r3 = readR(hr, o); // Trimmed
-                        r.r4 = readR(dr, o); // Trimmed
-                    }
-                    else
-                    {
-                        RegionOptions o;
-                        r.r1 = readR(hr, o); // No trimming
-                        r.r2 = readR(dr, o); // No trimming
-                        
-                        o.edge = edge;
-                        r.r3 = readR(hr, o); // Trimmed
-                        r.r4 = readR(BedTools::intersect(dr, rr, edge), o); // Trimmed
-                    }
-                    
-                    initAR(r);
-                    r.t1 = readTrans(Reader(GInfoCode(_p.opts.at(OPT_RESOURCE)).path));
-                    
-                    // Attributes on chrQS (hg19/hg38 not supported)
-                    r.r5 = readR(GFeatBED_(!bothHR ? chrQ : build), RegionOptions()); // Never trimming
-                    
-                    r.l1 = readL(std::bind(&Standard::addAF, &s, std::placeholders::_1), OPT_R_VCF, r, GVCF(Build::hg38));
-                    r.l2 = readTSV(Reader(option(OPT_ATTTSV, GAttrBED_())), r);
-                    r.l3 = readTSV(Reader(option(OPT_SYNC, GLTSV())), r, 2);
-                    
-                    r.v1 = readV(OPT_R_VCF,  r, nullptr, GVCF(Build::hg38)); // All variants
-                    r.v2 = readGV(OPT_R_VCF, r, nullptr, GVCF(Build::hg38)); // Germline variants
-                    r.v3 = readSV(OPT_R_VCF, r, nullptr, GVCF(Build::hg38)); // Somatic variants
-                    r.v4 = readV(OPT_R_VCF,  r, nullptr, GVCF(Build::chrQ)); // All decoy variants
-
-                    break;
-                }
-
-                case Tool::Somatic:
-                case Tool::Germline:
-                case Tool::BroadVCF:
-                {
-                    const auto useDecoy = _p.opts.count(OPT_VCF);
-
-                    // Key for checking automatic detection
-                    const auto key = useDecoy ? OPT_VCF : OPT_SEQUIN;
-                    
-                    // File for automatic detection
-                    const auto file = _p.opts.at(key);
-
-                    // Attempt to detect build from sequin VCF
-                    __ha__ = _p.opts.count(OPT_BUILD) ? parseBuild(_p.opts.at(OPT_BUILD)) : Detector::fromVCF(file);
-
-                    // Human BED regions (not used if decoy)
-                    const auto hr = _p.opts.count(OPT_R_HUMAN) ? _p.opts[OPT_R_HUMAN] : GRegionBED_(__ha__);
-
-                    // Decoy BED regions
-                    const auto dr = !useDecoy ? hr : (_p.opts.count(OPT_R_DECOY) ? _p.opts[OPT_R_DECOY] : GRegionBED_(Build::chrQ));
-
-                    const auto rr   = _p.opts.count(OPT_R_REGS) ? _p.opts[OPT_R_REGS] : dr;
-                    const auto edge = _p.opts.count(OPT_EDGE)   ? stoi(_p.opts[OPT_EDGE]) : DEFAULT_EDGE;
-
-                    /*
-                     * For combined,     a1 == chrQS and a2 == hg38
-                     * For non-combined, a1 == hg38  and a2 == null
-                     */
-                    
-                    try
-                    {
-                        r.a1 = std::shared_ptr<AttributeBed>(new AttributeBed(readAttrib(
-                                        BedTools::intersect2(BedTools::intersect(dr, rr, 0),
-                                              useDecoy ? GFeatBED_(Build::chrQ) : GFeatBED_(__ha__)))));
-                    }
-                    catch (const ZeroIntersectionError &)
-                    {
-                        r.a1 = std::shared_ptr<AttributeBed>(new AttributeBed());
-                    }
-                    
-                    // TODO: Why are we intersecting the attributes?
-                    r.a1->src = useDecoy ? GFeatBED_(Build::chrQ) : GFeatBED_(__ha__);
-                    
-                    if (useDecoy)
-                    {
-                        try
-                        {
-                            r.a2 = std::shared_ptr<AttributeBed>(new AttributeBed(
-                                        readAttrib(BedTools::intersect2(hr, GFeatBED_(__ha__)))));
-                        }
-                        catch (const ZeroIntersectionError &)
-                        {
-                            r.a2 = std::shared_ptr<AttributeBed>(new AttributeBed());
-                        }
-                    }
-
-                    /*
-                     * r1 = human regions without edge
-                     * r2 = human regions with edge
-                     * r3 = decoy regions without edge
-                     * r4 = decoy regions with edge
-                     */
-                    
-                    RegionOptions o1, o2, o3, o4;
-                    o2.edge = edge;
-                    o4.edge = edge;
-
-                    if (useDecoy)
-                    {
-                        o3.onlyC.insert(GDecoyChrQS); // No region other than chrQS should be included
-                        o4.onlyC.insert(GDecoyChrQS); // No region other than chrQS should be included
-                    }
-
-                    if (dr == rr)
-                    {
-                        r.r1 = readR(hr, o1); // Human regions without edge
-                        r.r2 = readR(hr, o2); // Human regions with edge
-                        r.r3 = readR(dr, o3); // Decoy regions without edge
-                        r.r4 = readR(dr, o4); // Decoy regions with edge
-                    }
-                    else
-                    {
-                        const auto f1 = BedTools::intersect(dr, rr, 0);
-                        const auto f2 = BedTools::intersect(dr, rr, edge);
-                        
-                        if (useDecoy)
-                        {
-                            r.r1 = readR(hr, o1); // Human regions without edge
-                            r.r2 = readR(hr, o2); // Human regions with edge
-                        }
-                        else
-                        {
-                            r.r1 = readR(f1, o1); // Human regions without edge
-                            r.r2 = readR(f2, o1); // Human regions with edge
-                        }
-                        
-                        r.r3 = readR(f1, o3); // Decoy regions without edge
-                        r.r4 = readR(f2, o4); // Decoy regions with edge
-                    }
-                    
-                    r.r5 = readR(dr, o4); // Decoy regions without intersection with edge
-
-                    const auto vcf = useDecoy ? GVCF(Build::chrQ) : GVCF(__ha__);
-                    
-                    r.v1 = readV (OPT_R_VCF, r, r.r4, vcf); // All variants
-                    r.v2 = readGV(OPT_R_VCF, r, r.r4, vcf); // Germline variants
-                    r.v3 = readSV(OPT_R_VCF, r, r.r4, vcf); // Somatic variants
-
-                    break;
-                }
-
-                case Tool::Meta:
-                {
-                    #define MMix()  (MetaMix(_p.opts.at(OPT_RESOURCE)).path)
-                    #define MQBed() (MetaDBED(_p.opts.at(OPT_RESOURCE)).path)
-                    
-                    r.l1 = readL(std::bind(&Standard::readMMix, &s, std::placeholders::_1), OPT_MMIX, r, MMix());
-                    r.l3 = readTSV(Reader(option(OPT_SYNC, GLTSV())), r, 2); // Unit
-                    r.t1 = readTrans(Reader(GInfoCode(_p.opts.at(OPT_RESOURCE)).path));
-
-                    const auto edge = _p.opts.count(OPT_EDGE) ? stoi(_p.opts[OPT_EDGE]) : DEFAULT_EDGE;
-                    RegionOptions o2;
-                    o2.edge = edge;
-
-                    r.r1 = readR(MQBed());
-                    r.r2 = readR(MQBed(), o2);
-
-                    break;
-                }
-
-                case Tool::RNA:
-                {
-                      #define RMix()  (RNAMix(_p.opts.at(OPT_RESOURCE)).path)
-                      #define RTBed() (RNATBed(_p.opts.at(OPT_RESOURCE)).path)
-                      #define RGBed() (RNAGBed(_p.opts.at(OPT_RESOURCE)).path)
-
-                    r.l1 = readL(std::bind(&Standard::readRMix,  &s, std::placeholders::_1), OPT_MMIX, r, RMix());
-                    r.l2 = readL(std::bind(&Standard::readRGMix, &s, std::placeholders::_1), OPT_MMIX, r, RMix());
-                    r.l3 = readL(std::bind(&Standard::readRLen,  &s, std::placeholders::_1), OPT_MMIX, r, RMix());
-
-                    const auto edge  = _p.opts.count(OPT_EDGE) ? stoi(_p.opts[OPT_EDGE]) : DEFAULT_EDGE;
-                    RegionOptions o_;
-                    o_.edge = edge;
-
-                    r.r1 = readR(RTBed());     // Non-trimming transcripts
-                    r.r2 = readR(RTBed(), o_); // Trimmed transcripts
-                    r.r3 = readR(RGBed());     // Non-trimming genes
-                    r.r4 = readR(RGBed(), o_); // Trimmed genes
-
-                    break;
-                }
-
-                case Tool::TMM:
-                case Tool::Norm:
-                {
-                    RegionOptions o2;
-                    o2.edge = DEFAULT_EDGE;
-                    
-                    const auto build = _p.opts.count(OPT_BUILD) ? parseBuild(_p.opts.at(OPT_BUILD)) : Build::hg38;
-                    
-                    // Attribute regions
-                    initAR(r);
-                    
-                    r.l1 = readL(std::bind(&Standard::addAF, &s, std::placeholders::_1), OPT_R_VCF, r, GVCF(build));
-                    r.l2 = readTSV(Reader(option(OPT_ATTTSV, GAttrBED_())), r);
-                    r.l3 = readTSV(Reader(option(OPT_SYNC, GLTSV())), r, 2); // Unit
-                    r.t1 = readTrans(Reader(GInfoCode(_p.opts.at(OPT_RESOURCE)).path));
-
-                    r.v1 = readV (OPT_R_VCF, r, r.r2, GVCF(build)); // All variants
-                    r.v2 = readGV(OPT_R_VCF, r, r.r2, GVCF(build)); // Germline variants
-                    r.v3 = readSV(OPT_R_VCF, r, r.r2, GVCF(build)); // Somatic variants
-
-                    /*
-                     * l1 is always the base quantitative ladder. We should check if our mixture
-                     * is compatible or not.
-                     */
-                    
-                    if (_p.mix == Mix_2 && !r.l1->hasMix2())
-                    {
-                        throw InvalidOptionException("Mixture B specified, but only a single mixture found in reference file: " + r.l1->src);
-                    }                    
-                    else if (_p.mix == Mix_3 && !r.l1->hasMix3())
-                    {
-                        throw InvalidOptionException("Mixture C specified, but only a single mixture found in reference file: " + r.l1->src);
-                    }
-
-                    break;
-                }
-
-                default: { break; }
-            }
-
-            Standard::instance().gen.finalize(r);
-            Standard::instance().rna.finalize(r);
-            Standard::instance().meta.finalize(r);
-
-            auto initSOptions = [&](SOptions &o, const FileName &i1, const FileName &i2)
-            {
-                assert(o.flip && o.skipMerge);
-
-                o.bam = _p.opts.count(OPT_COMBINE);
-
-                // How many k-mers to skip?
-                o.skipKM = _p.opts.count(OPT_SKIP) ? stoi(_p.opts[OPT_SKIP]) : 5;
-                
-                // Number of threads
-                o.thr = _p.opts.count(OPT_THREAD) ? stoi(_p.opts[OPT_THREAD]) : 1;
-                
-                // K-mer length
-                o.k = _p.opts.count(OPT_KMER) ? stoi(_p.opts[OPT_KMER]) : K_DEFAULT_L;
-                
-                // For debugging?
-                o.debug = _p.opts.count(OPT_DEBUG);
-                
-                // Classification rule
-                o.rule = _p.opts.count(K_DEFAULT_R) ? stoi(_p.opts[K_DEFAULT_R]) : K_DEFAULT_R;
-                
-                o.index = _p.opts.count(OPT_FASTA) ? _p.opts[OPT_FASTA] : (!o.bam ? i1 : i2);
-            };
+            auto sam = 0;
+            auto seq = 0;
             
-            auto initCalib = [&](int key, double &x)
+            for (auto &i : inters.at(GDecoyChrQS).data())
             {
-                if (!_p.od.count(key))
-                {
-                    return;
-                }
-                else if (_p.od.at(key) <= 0)
-                {
-                    throw std::runtime_error("Calibration value must be greater than zero");
-                }
-                
-                x = _p.od.at(key);
-            };
-            
-            switch (_p.tool)
-            {
-                case Tool::Meta:
-                {
-                    MSplit::Options o;
-                    initSOptions(o, MetaFA(_p.opts.at(OPT_RESOURCE)).path, MetaFA(_p.opts.at(OPT_RESOURCE)).path);
-                    if (o.bam) { o.index = MetaDecoy(_p.opts.at(OPT_RESOURCE)).path; }
-
-                    o.mix = _p.mix;
-                    assert(o.seqC == NO_CALIBRATION && o.ladC == NO_CALIBRATION);
-
-                    double tmp = -1;
-                    
-                    initCalib(OPT_CALIB,  o.seqC);
-                    initCalib(OPT_LCALIB, o.ladC);
-                    
-                    o.edge = _p.opts.count(OPT_EDGE) ? stoi(_p.opts[OPT_EDGE]) : DEFAULT_EDGE;
-                    
-                    start<MSplit>("meta", [&](const MSplit::Options &)
-                    {
-                        if (o.bam) { MSplit::report(_p.opts[OPT_COMBINE], "", o); }
-                        else       { MSplit::report(_p.opts[OPT_1], _p.opts.count(OPT_2) ? _p.opts[OPT_2] : _p.opts[OPT_1], o); }
-                    }, o);
-
-                    break;
-                }
-                    
-                case Tool::RNA:
-                {
-                    RSplit::Options o;
-                    initSOptions(o, RSFA(), RDFA());
-                    
-                    o.mix = _p.mix;
-                    assert(o.seqC == NO_CALIBRATION && o.ladC == NO_CALIBRATION);
-                    
-                    initCalib(OPT_CALIB, o.seqC);
-                    
-                    start<RSplit>("rna", [&](const RSplit::Options &)
-                    {
-                        if (o.bam) { RSplit::report(_p.opts[OPT_COMBINE], "", o); }
-                        else       { RSplit::report(_p.opts[OPT_1], _p.opts.count(OPT_2) ? _p.opts[OPT_2] : _p.opts[OPT_1], o); }
-                    }, o);
-
-                    break;
-                }
-                    
-                case Tool::Split:
-                {
-                    GSplit::Options o;
-
-                    initSOptions(o, GSFA(), GDFA());
-                    initCalib(OPT_CALIB,  o.seqC);
-                    initCalib(OPT_LCALIB, o.ladC);
-
-                    start<GSplit>("split", [&](const GSplit::Options &)
-                    {
-                        if (o.bam) { GSplit::report(_p.opts[OPT_COMBINE], "", o); }
-                        else       { GSplit::report(_p.opts[OPT_1], _p.opts.count(OPT_2) ? _p.opts[OPT_2] : _p.opts[OPT_1], o); }
-                    }, o);
-
-                    break;
-                }
-
-                case Tool::TMM:
-                {
-                    GTMM::Options o;
-                    
-                    start<GTMM>("tmm", [&](const GSplit::Options &)
-                    {
-                        GTMM::report(_p.opts[OPT_1], o);
-                    }, o);
-
-                    break;
-                }
-
-                case Tool::Norm:
-                {
-                    GNorm::Options o;
-                    initSOptions(o, GSFA(), GSFA());
-                    assert(!o.bam);
-                    
-                    std::vector<FileName> f1, f2;
-                    
-                    if (_p.opts.count(OPT_A1)) { f1.push_back(_p.opts.at(OPT_A1)); }
-                    if (_p.opts.count(OPT_B1)) { f1.push_back(_p.opts.at(OPT_B1)); }
-                    if (_p.opts.count(OPT_C1)) { f1.push_back(_p.opts.at(OPT_C1)); }
-                    if (_p.opts.count(OPT_D1)) { f1.push_back(_p.opts.at(OPT_D1)); }
-                    if (_p.opts.count(OPT_E1)) { f1.push_back(_p.opts.at(OPT_E1)); }
-                    if (_p.opts.count(OPT_A2)) { f2.push_back(_p.opts.at(OPT_A2)); }
-                    if (_p.opts.count(OPT_B2)) { f2.push_back(_p.opts.at(OPT_B2)); }
-                    if (_p.opts.count(OPT_C2)) { f2.push_back(_p.opts.at(OPT_C2)); }
-                    if (_p.opts.count(OPT_D2)) { f2.push_back(_p.opts.at(OPT_D2)); }
-                    if (_p.opts.count(OPT_E2)) { f2.push_back(_p.opts.at(OPT_E2)); }
-                    
-                    start<GNorm>("norm", [&](const GSplit::Options &)
-                    {
-                        GNorm::report(f1, f2, o);
-                    }, o);
-
-                    break;
-                }
-
-                case Tool::BroadVCF:
-                {
-                    GVariant::Options o;
-                    
-                    o.edge  = _p.opts.count(OPT_EDGE) ? stoi(_p.opts[OPT_EDGE]) : DEFAULT_EDGE;
-                    o.uBED  = _p.opts.count(OPT_R_REGS) ? _p.opts[OPT_R_REGS] : MISSING;
-                    o.decoy = true;
-                    
-                    start<GBroadVCF>("broadVCF", [&](const GVariant::Options &)
-                    {
-                        GBroadVCF::report(_p.opts.at(OPT_VCF), o);
-                    }, o);
-
-                    break;
-                }
-                    
-                case Tool::Somatic:
-                case Tool::Germline:
-                {
-                    GVariant::Options o;
-                    
-                    o.decoy = _p.opts.count(OPT_VCF);
-                    o.edge  = _p.opts.count(OPT_EDGE) ? stoi(_p.opts[OPT_EDGE]) : DEFAULT_EDGE;
-                    o.uBED  = _p.opts.count(OPT_R_REGS) ? _p.opts[OPT_R_REGS] : MISSING;
-                    
-                    const auto f1 = o.decoy ? _p.opts.at(OPT_VCF) : _p.opts.count(OPT_SAMPLE) ? _p.opts.at(OPT_SAMPLE) : "";
-                    const auto f2 = o.decoy ? "" : _p.opts.at(OPT_SEQUIN);
-                    
-                    if (_p.tool == Tool::Germline)
-                    {
-                        start<GGerm>(o.base = "germline", [&](const GVariant::Options &)
-                        {
-                            GGerm::report(f1, f2, o);
-                        }, o);
-                    }
-                    else
-                    {
-                        start<GSomatic>(o.base = "somatic", [&](const GVariant::Options &)
-                        {
-                            GSomatic::report(f1, f2, o);
-                        }, o);
-                    }
-
-                    break;
-                }
-
-                case Tool::BroadBAM:
-                {
-                    GBroadBam::Options o;
-                    
-                    o.seqC  = _p.od.count(OPT_CALIB) ? _p.od.at(OPT_CALIB) : -1;
-                    o.index = GSeqDecoy(_p.opts.at(OPT_RESOURCE)).path;
-                    analyze_1<GBroadBam>("broadBAM", OPT_COMBINE, o);
-
-                    break;
-                }
-
-                case Tool::Calibrate:
-                {
-                    typedef GCalibrate::Method Method;
-                    const auto isChrQ = _p.opts.count(OPT_COMBINE);
-                    
-                    GCalibrate::Options o;
-                    initSOptions(o, isChrQ ? GDFA() : GSFA(), isChrQ ? GDFA() : GSFA());
-                    o.edge = _p.opts.count(OPT_EDGE) ? stoi(_p.opts[OPT_EDGE]) : DEFAULT_EDGE;
-                    
-                    o.writeS = _p.opts.count(OPT_ONLY_S);
-                    o.writeD = _p.opts.count(OPT_ONLY_D);
-                    o.writeC = _p.opts.count(OPT_ONLY_C);
-                    
-                    // How to calibrate?
-                    const auto meth = _p.opts.count(OPT_METHOD) ? _p.opts[OPT_METHOD] : "mean";
-                    
-                    if      (meth == "mean")         { o.meth = Method::Mean;   }
-                    else if (meth == "median")       { o.meth = Method::Median; }
-                    else if (meth == "globalMean")   { o.meth = Method::SampleMean; }
-                    else if (meth == "globalMedian") { o.meth = Method::SampleMedian; }
-                    else if (isFloat(meth))    { o.meth = Method::Percent; o.seqC = stof(meth); }
-                    else
-                    {
-                        throw std::runtime_error("Unknown method: " + meth);
-                    }
-
-                    if (o.bam)
-                    {
-                        analyze_1<GCalibrate>("calibrate", OPT_COMBINE, o);
-                    }
-                    else
-                    {
-                        if (o.meth != Method::Percent && !_p.opts.count(OPT_SAMPLE))
-                        {
-                            throw MissingOptionError("--sample");
-                        }
-                        
-                        analyze_2<GCalibrate>("calibrate", o.meth != Method::Percent ? OPT_SAMPLE : OPT_SEQUIN, OPT_SEQUIN, o);
-                    }
-                    
-                    break;
-                }
-
-                default : { break; }
+                sam += r.samp.r2.find(i.second.id())->stats().n;
+                seq += r.before.r2.find(i.second.id())->stats().n;
             }
 
-            break;
+            // Number of target sequin reads after calibration
+            auto tar = (o.seqC / (1.0 - o.seqC)) * sam;
+            
+            // Make sure our target doesn't goto zero if the sample is non-zero
+            if (seq && !tar)
+            {
+                tar = sam;
+            }
+            
+            // Scaling factor for calibration
+            r.c2.p = (sam == 0) ? 1.0 : (seq == 0) ? 0.0 : (tar >= seq ? 1.0 : ((float) tar) / seq);
+
+            o.info("Target: "  + S0(tar));
+            o.info("Scaling: " + S4(r.c2.p));
         }
-
-        default : { break; }
-    }
-}
-
-extern int parse_options(int argc, char ** argv)
-{
-    char cwd[1024];
-    
-    auto printError = [&](const std::string &x)
-    {
-        std::cerr << "***********************" << std::endl;
-        std::cerr << "[ERRO]: " << x << std::endl;
-        std::cerr << "***********************" << std::endl << std::endl;
     };
     
-    if (getcwd(cwd, sizeof(cwd)))
+    r.bAF = GDecoyResults::buildAF(r.before, isChrQ); // Allele frequency before calibration
+
+    // Only perform mirror calibration if no percentage/absolue calibration
+    if (o.seqC == NO_CALIBRATION && !o.inputMC.empty() && !o.writeMC.empty())
     {
-        __working__ = cwd;
+        // Build normalization for each sequin
+        getNormFactors();
+        
+        logRun([&]()
+        {
+            // Calibrate BAM (only on the decoy BAM)
+            if (!o.inputMC.empty() && !o.writeMC.empty())
+            {
+                o.info("Calibrating to " + o.writeMC);
+                
+                if (o.seqC == NO_CALIBRATION)
+                {
+                    // Calibrate by sampling coverage
+                    calibrateBAM(o.inputMC, o.writeMC, r.c1.norms, o);
+                }
+                else
+                {
+                    calibrateBAM(o.inputMC, o.writeMC, r.c2, o);
+                }
+                
+                auto o_ = o;
+                o_.tsvA = o_.tsvE = o_.tsvR = "";
+                o_.writeM = o_.writeS = o_.writeD = o_.writeT = "";
+                
+                const auto f1 = twoBAM ? "" : o.writeMC;
+                const auto f2 = twoBAM ? o.writeMC : "";
+                
+                // Analyze the calibrated BAM
+                r.B3 = DecoyAnalyzer::analyze(f1, f2, o_, [&](const ParserBAM::Data &x, const DInter *r1, const DInter *r2, bool trimmed) {
+                    g1(GDecoyStatus::AfterSC, x, r1, r2, trimmed);
+                }); g2(GDecoyStatus::AfterSC); r.after = r.B3.decoy;
+            }
+        }, o, "Started mirror sequin calibration", "Completed mirror sequin calibration");
+
+        r.aAF = GDecoyResults::buildAF(r.after, isChrQ);  // Allele frequency after calibration
+    }
+    else if (o.seqC != NO_CALIBRATION)
+    {
+        // Make sure this is the calibrated BAM
+         assert(!_o_.writeC.empty());
+
+        auto tmp = cloneO(o);
+        
+        tmp.ladC   = NO_CALIBRATION;
+        tmp.seqC   = NO_CALIBRATION;
+        tmp.writeC = ""; // Only statistics
+        tmp.writeS = ""; // Only statistics
+        tmp.writeD = ""; // Only statistics
+        tmp.writeT = ""; // Only statistics
+
+        r.B3 = DecoyAnalyzer::analyze(_o_.writeC, "", tmp, [&](const ParserBAM::Data &, const DInter *, const DInter *, bool) {});
     }
     
-    try
-    {
-        parse(argc, argv);
-        return 0;
-    }
-    catch (const FailedCommandException &ex)
-    {
-        printError(std::string(ex.what()));
-    }
-    catch (const InvalidFormatException &ex)
-    {
-        printError("Invalid file format: " + std::string(ex.what()));
-    }
-    catch (const InvalidUsageException &)
-    {
-        printError("Invalid usage. Please check and try again.");
-    }
-    catch (const InvalidToolError &ex)
-    {
-        printError("Invalid command. Unknown tool: " + ex.v + ". Please check your usage and try again.");
-    }
-    catch (const InvalidOptionException &ex)
-    {
-        printError((boost::format("Invalid usage. Unknown option: %1%") % ex.o).str());
-    }
-    catch (const InvalidValueException &ex)
-    {
-        printError((boost::format("Invalid command. %1% not expected for %2%.") % ex.v % ex.o).str());
-    }
-    catch (const MissingOptionError &ex)
-    {
-        const auto format = "Invalid command. Mandatory option is missing. Please specify %1%.";
-        printError((boost::format(format) % ex.o).str());
-    }
-    catch (const MissingBundleError &ex)
-    {
-        printError((boost::format("%1%%2%") % "Failed to find bundle at: " % ex.path).str());
-    }
-    catch (const InvalidBundleError &ex)
-    {
-        printError((boost::format("%1%%2%") % "Invalid bundle. Missing bundle folder: " % ex.file).str());
-    }
-    catch (const InvalidFileError &ex)
-    {
-        printError((boost::format("%1%%2%") % "Invalid command. File is invalid: " % ex.file).str());
-    }
-    catch (const InvalidDependency &ex)
-    {
-        printError(ex.what());
-    }
-    catch (const std::runtime_error &ex)
-    {
-        printError(ex.what());
-    }
+    GDecoyResults::writeF(r, o);
+    GDecoyResults::writeR(r, o);
+    GDecoyResults::writeV(r, o);
 
-    return 1;
+    DecoyAnalyzer::ErrorOptions eo(o.tsvE, o.r1, o.r2, GDecoyChrQS, o.v1, isChrQ, o);
+    eo.data[&r.before] = false; eo.data[&r.after] = true;
+    //assert(eo.isDecoy == isChrQ);
+    
+    // Generating error profiles
+    DecoyAnalyzer::writeE(eo);
+
+    // After ladder normalisation
+    GDecoyResults::writeL(ol.tsvL2, r.B2, ol);
+
+    if (r.B1.wM)
+    {
+        logRun([&]()
+        {
+            // Calibrated sequins or uncalibrated (but trimmed)
+            const auto src = !o.writeMC.empty() ? o.writeMC : writeT;
+            
+            ParserBAM::parse(src, [&](ParserBAM::Data &x, const ParserBAM::Info &)
+            {
+                r.B1.wM->write(x);
+            });
+
+            r.B1.wM->close();
+        }, o, "Started merging sample and calibrated sequin reads",
+              "Completed merging sample and calibrated sequin reads");
+    }
+    
+    return r;
 }
 
-int main(int argc, char ** argv)
+GResource::GResource(const Path &path, const FileName &file, const FileName &ext, Build x)
 {
-    srand(time(0));
-    return parse_options(argc, argv);
+    const auto s1 = x == Build::chrQ ? "chrQ" : toString(x);
+    const auto s2 = toString(x);
+
+    Resource::path = (x == Build::None) ? Bundle::latest(path + "/" + file + "_", ext) :
+                                                  Bundle::latest(path + "/" + s1 + "/" + file + "_" + s2, ext);
 }
+
+LResource::LResource(const Path &path, const FileName &file, const FileName &ext, Build x)
+{
+    Resource::path = Bundle::latest(path + "/" + toString(x) + "/" + file + "_" + toString(x), ext);
+}
+
+Bin Anaquin::GBin(const SequinID &x, std::shared_ptr<VCFLadder> v1)
+{
+    v1 = v1 ? v1 : Standard::instance().gen.v1();
+    
+    auto f = [&](const std::string &s, Bin &r)
+    {
+        /*
+         * Sequin names can be classified directly without VCF
+         */
+        
+             if (s == "IF") { r = Bin::IF; return true; }
+        else if (s == "HP") { r = Bin::HP; return true; }
+        else if (s == "MS") { r = Bin::MS; return true; }
+        else if (s == "MT") { r = Bin::MT; return true; }
+        else if (s == "HL") { r = Bin::HL; return true; }
+        else if (s == "LD") { r = Bin::LD; return true; }
+        else if (s == "SV") { r = Bin::SV; return true; }
+        else if (s == "PV") { r = Bin::SV; return true; }
+        else if (s == "TL") { r = Bin::SV; return true; }
+        else if (s == "IM") { r = Bin::IM; return true; }
+        else if (s == "VC") { r = Bin::VC; return true; }
+        
+        const auto v = v1 ? v1->data.find(x) : nullptr;
+        
+        if (v)
+        {
+            switch (v->gt)
+            {
+                case Genotype::MSI:         { r = Bin::MI; return true; }
+                case Genotype::Somatic:     { r = Bin::SO; return true; }
+                case Genotype::Homozygous:
+                case Genotype::Heterzygous: { r = Bin::GR; return true; }
+            }
+        }
+        
+             if (s == "CM") { r = Bin::SO; return true; }
+        else if (s == "CV") { r = Bin::SO; return true; }
+        else if (s == "CL") { r = Bin::GR; return true; }
+        else if (s == "DV") { r = Bin::GR; return true; }
+        else if (s == "GV") { r = Bin::GR; return true; }
+        
+        return false;
+    };
+    
+    Bin r;
+    
+    if (f(first(noPID(x), "_"), r))
+    {
+        return r;
+    }
+
+    throw std::runtime_error("Unknown binning for: " + x);
+}
+
+bool Anaquin::isHP    (const Bin x) { return x == Bin::HP; }
+bool Anaquin::isMS    (const Bin x) { return x == Bin::MS; }
+bool Anaquin::isSoma  (const Bin x) { return x == Bin::SO; }
+bool Anaquin::isVector(const Bin x) { return x == Bin::VC; }
+
+bool Anaquin::isHP    (const SequinID &x) { return isHP(GBin(x));     }
+bool Anaquin::isMS    (const SequinID &x) { return isMS(GBin(x));     }
+bool Anaquin::isSoma  (const SequinID &x) { return isSoma(GBin(x));   }
+bool Anaquin::isVector(const SequinID &x) { return isVector(GBin(x)); }
