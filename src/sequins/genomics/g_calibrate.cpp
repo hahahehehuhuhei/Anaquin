@@ -40,7 +40,19 @@ GCalibrate::Stats GCalibrate::analyze(const FileName &f1, const FileName &f2, co
     if (o.writeD) { m1("trimmed.bam", "sequin.bam"); } // Not from the untrimmed "sequin.bam"
     if (o.writeC) { m1("sequin_calibrated.bam", "calibrated.bam"); }
 
-    m1("merged.bam",    "merged.bam");
+    const auto both = !f1.empty() && !f2.empty();
+    
+    /*
+     * Merged alignments include both sample and sequin calibrated reads. However, it would make
+     * only sense for a decoy protocol, where the sequin reads are not aligned to the human
+     * chromosomes.
+     */
+    
+    if (!both)
+    {
+        m1("merged.bam", "merged.bam");
+    }
+    
     m1("broad_bam.txt", "calibrate_report.txt");
 
     if (o.debug)
