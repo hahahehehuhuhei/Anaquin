@@ -242,6 +242,7 @@ static AnalyzeBAMResults analyzeBAM(const FileName &f1,
             // Only trimmed if it's decoy and satisfy conditions
             auto isTrimmed = false;
             
+            // Sample read?
             if (mustSam || (both && !isDecoyC))
             {
                 if (wS) { wS->write(x); }
