@@ -949,6 +949,7 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
             // Calibrated sequins or uncalibrated (but trimmed)
             const auto src = !o.writeMC.empty() ? o.writeMC : writeT;
             
+            // Write out calibrated reads to merged
             ParserBAM::parse(src, [&](ParserBAM::Data &x, const ParserBAM::Info &)
             {
                 r.B1.wM->write(x);
