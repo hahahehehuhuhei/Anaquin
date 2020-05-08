@@ -22,7 +22,7 @@ $ anaquin calibrate -b alignments.bam
 <b>OUTPUTS</b>
         anaquin.log                     Log file of anaquin processes.   
         calibrate_report.txt            Summary statistics describing sequencing and alignment performance.
-        merged.bam                      Alignment file comprising both sample and (calibrated) sequin alignment.
+        merged.bam                      Alignment file comprising both sample and (calibrated) sequin alignment (only if chrQ*).
         sample.bam                      Sample alignments (.BAM) (only with --sample_bam).
         sequin.bam                      Sequin-derived alignments (.BAM) to the decoy chromosome (only with --sequin_bam).    
         calibrated.bam                  Sequin-derived alignments that have been calibrated to match the coverage of corresponding human genome regions
