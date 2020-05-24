@@ -595,7 +595,8 @@ void KPartition(void *p,
         };
         
         // Always required for ladder calibration
-        if (d->o.writeReads || k == Bin::LD)
+        //if (d->o.writeReads || k == Bin::LD)
+        if (k == Bin::LD)
         {
             addRead();
         }
