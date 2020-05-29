@@ -778,10 +778,10 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
             
             if (o.debug)
             {
-                for (auto &i : samp.raws)
-                {
-                    o.logInfo("[DEBUG]: " + std::to_string(i));
-                }
+                //for (auto &i : samp.raws)
+                //{
+                //    o.logInfo("[DEBUG]: " + std::to_string(i));
+                //}
 
                 o.logInfo("Inside getNormFactors(). sample.mean = " + std::to_string(samp.mean));
                 o.logInfo("Inside getNormFactors(). sample.median = " + std::to_string(samp.p50));
@@ -800,27 +800,68 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
                     
                     const auto before = r.before.r2.find(name);
                     
-                    const auto useGlobal = o.meth == CalibrateMethod::SampleMedian ||
-                                           o.meth == CalibrateMethod::SampleMean;
+                    const auto m1 = o.meth != CalibrateMethod::Custom ? o.meth : CalibrateMethod::Mean;
+                    const auto m2 = o.meth != CalibrateMethod::Custom ? o.meth : CalibrateMethod::Mean;
+
+                    // Sequin coverage
+                    const auto seqC = before ? getLocalCoverage(r.before.r2.find(name)->stats(), m1) : NAN;
+
+                    // Sequin median (only used in custom)
+                    const auto samM = samp.p50;
                     
-                    // Sample coverage (local or global)
-                    const auto samC = o.meth == CalibrateMethod::SampleMedian ? samp.p50  :
-                                      o.meth == CalibrateMethod::SampleMean   ? samp.mean :
-                                      getLocalCoverage(r.samp.r2.find(name)->stats(), o.meth);
+                    // Provisional local sample coverage
+                    const auto samC1 = getLocalCoverage(r.samp.r2.find(name)->stats(), m2);
+
+                    // Final sample coverage
+                    auto samC2 = samC1;
+                    
+                    /*
+                     * Custom calibration. Possible scenarios:
+                     *
+                     *   1. Sequin coverage > sample coverage
+                     *
+                     *      Anaquin was designed to calibrate region by region. However, the sequin reads would be
+                     *      all lost if sample coverage is too low. What's too low? That is set by
+                     *      customSequinThreshold.
+                     *
+                     *   2. Sample coverage > sequin coveage
+                     *
+                     *      Anaquin can't calibrate locally. Calibrate to sample median.
+                     */
+                    
+                    if (o.meth == CalibrateMethod::Custom)
+                    {
+                        // Scenario 1
+                        if (seqC > samC1)
+                        {
+                            // Sample coverage is high enough?
+                            if (samC1 > o.customSequinThreshold)
+                            {
+                                // We are going to use the local sample coverage it for calibration
+                                samC2 = samC1;
+                            }
+                            else
+                            {
+                                // Don't want to lose too much sequin reads. Calibrate to sample median
+                                samC2 = samM;
+                            }
+                        }
+                        
+                        // Scenario 2
+                        else if (samC1 > seqC)
+                        {
+                            // Calibrate to sample median
+                            samC2 = samM;
+                        }
+                    }
                     
                     if (o.debug)
                     {
-                        o.logInfo("Sample: " + std::to_string(samC) + " for " + name);
+                        o.logInfo("Sample: " + std::to_string(samC2) + " for " + name);
                     }
-                    
-                    // Local calibration method for sequins (SampleMedian is only for calculating sample coverage)
-                    const auto m2 = useGlobal ? CalibrateMethod::Mean : o.meth;
-                    
-                    // Sequin coverage
-                    const auto seqC = before ? getLocalCoverage(r.before.r2.find(name)->stats(), m2) : NAN;
-                    
+
                     // Calibrate by sample coverage
-                    r.c1.norms[name] = seqC ? std::min(samC / seqC, 1.0) : NAN;
+                    r.c1.norms[name] = seqC ? std::min(samC2 / seqC, 1.0) : NAN;
                 }
             }
             
