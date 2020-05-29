@@ -49,7 +49,7 @@ typedef std::string Value;
 
 static Build __ha__;
 
-static std::string version() { return "3.18.1"; }
+static std::string version() { return "3.19.0"; }
 
 /*
  * Options specified in the command line
@@ -103,7 +103,9 @@ static std::string version() { return "3.18.1"; }
 #define OPT_ONLY_D   846
 #define OPT_ONLY_C   847
 #define OPT_CALIB    848
-#define OPT_MMIX     849
+#define OPT_FIXED_L1 849
+#define OPT_CUSTOM_SEQUIN_THRESHOLD 850
+#define OPT_MMIX     851
 
 // Shared with other modules
 std::string __full_command__;
@@ -276,7 +278,8 @@ static const struct option long_opts[] =
 
     { "mix",    required_argument, 0, OPT_MIXTURE },
     { "method", required_argument, 0, OPT_METHOD  },
-    { "calibration_method", required_argument, 0, OPT_METHOD  },
+    { "calibration_method", required_argument, 0, OPT_METHOD },
+    { "custom_sequin_threshold",  required_argument, 0, OPT_CUSTOM_SEQUIN_THRESHOLD },
 
     { "calibrate",        required_argument, 0, OPT_CALIB  },
     { "ladder_calibrate", required_argument, 0, OPT_LCALIB },
@@ -614,6 +617,7 @@ void parse(int argc, char ** argv)
         switch (opt)
         {
             case OPT_RULE:
+            case OPT_CUSTOM_SEQUIN_THRESHOLD:
             {
                 try
                 {
@@ -642,7 +646,7 @@ void parse(int argc, char ** argv)
 
                 break;
             }
-                
+            
             case OPT_EDGE:
             case OPT_KMER:
             case OPT_SKIP:
@@ -1259,11 +1263,19 @@ void parse(int argc, char ** argv)
                     // How to calibrate?
                     const auto meth = _p.opts.count(OPT_METHOD) ? _p.opts[OPT_METHOD] : "mean";
                     
-                    if      (meth == "mean")         { o.meth = Method::Mean;   }
-                    else if (meth == "median")       { o.meth = Method::Median; }
-                    else if (meth == "sampleMean")   { o.meth = Method::SampleMean; }
-                    else if (meth == "sampleMedian") { o.meth = Method::SampleMedian; }
-                    else if (isFloat(meth))    { o.meth = Method::Percent; o.seqC = stof(meth); }
+                    if      (meth == "mean")   { o.meth = Method::Mean;   }
+                    else if (meth == "median") { o.meth = Method::Median; }
+                    else if (meth == "custom")
+                    {
+                        if (_p.opts.count(OPT_CUSTOM_SEQUIN_THRESHOLD) == 0)
+                        {
+                            throw MissingOptionError("--custom_sequin_threshold");
+                        }
+                        
+                        o.meth = Method::Custom;
+                        o.customSequinThreshold = stof(_p.opts.at(OPT_CUSTOM_SEQUIN_THRESHOLD));
+                    }
+                    else if (isFloat(meth)) { o.meth = Method::Percent; o.seqC = stof(meth); }
                     else
                     {
                         throw std::runtime_error("Unknown method: " + meth);

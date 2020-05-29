@@ -20,6 +20,9 @@ namespace Anaquin
             FileName index;
             Proportion seqC;
             CalibrateMethod meth = CalibrateMethod::Mean;
+            
+            // Only if meth == CalibrationMethod::Custom
+            double customSequinThreshold = 0;
         };
         
         struct SomaticReport

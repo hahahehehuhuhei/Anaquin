@@ -26,6 +26,9 @@ namespace Anaquin
 
             // How to calculate coverage? Defined only if seqC == NO_CALIBRATION
             Method meth = Method::Mean;
+            
+            // Only for Method::Custom
+            double customSequinThreshold = 0;
 
             Base edge;
 

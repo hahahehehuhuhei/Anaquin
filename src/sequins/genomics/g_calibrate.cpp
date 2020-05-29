@@ -9,17 +9,17 @@ GCalibrate::Stats GCalibrate::analyze(const FileName &f1, const FileName &f2, co
     GBroadBam::Options o_(cloneO(o)); o_.index = o.index; o_.debug = true; o_.showGen = false;
     o_.meth  = o.meth;
     o_.origW = o.work;
- 
+    o_.customSequinThreshold = o.customSequinThreshold;
+
     if (o.debug)
     {
         switch (o_.meth)
         {
-            case CalibrateMethod::None:         { o.logInfo("None");         break; }
-            case CalibrateMethod::Mean:         { o.logInfo("Mean");         break; }
-            case CalibrateMethod::Median:       { o.logInfo("Median");       break; }
-            case CalibrateMethod::Percent:      { o.logInfo("Percent");      break; }
-            case CalibrateMethod::SampleMean:   { o.logInfo("SampleMean");   break; }
-            case CalibrateMethod::SampleMedian: { o.logInfo("SampleMedian"); break; }
+            case CalibrateMethod::Custom:  { o.logInfo("Custom");  break; }
+            case CalibrateMethod::None:    { o.logInfo("None");    break; }
+            case CalibrateMethod::Mean:    { o.logInfo("Mean");    break; }
+            case CalibrateMethod::Median:  { o.logInfo("Median");  break; }
+            case CalibrateMethod::Percent: { o.logInfo("Percent"); break; }
         }
     }
     
