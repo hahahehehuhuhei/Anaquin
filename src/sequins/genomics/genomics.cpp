@@ -822,13 +822,15 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
                      *
                      *      Anaquin was designed to calibrate region by region. However, the sequin reads would be
                      *      all lost if sample coverage is too low. What's too low? That is set by
-                     *      customSequinThreshold.
+                     *      customSequinThreshold. If it's too low, calibrate to the sample median.
                      *
                      *   2. Sample coverage > sequin coveage
                      *
-                     *      Anaquin can't calibrate locally. Calibrate to sample median.
+                     *      Anaquin can't calibrate locally. Calibrate to the sample median.
                      */
                     
+                    if (o.debug) { o.logInfo("Calibrating: " + name); }
+
                     if (o.meth == CalibrateMethod::Custom)
                     {
                         // Scenario 1
@@ -837,27 +839,28 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
                             // Sample coverage is high enough?
                             if (samC1 > o.customSequinThreshold)
                             {
-                                // We are going to use the local sample coverage it for calibration
-                                samC2 = samC1;
+                                samC2 = samC1; // Calibrate locally
+                                if (o.debug) { o.logInfo("Custom 1.1"); }
                             }
                             else
                             {
-                                // Don't want to lose too much sequin reads. Calibrate to sample median
-                                samC2 = samM;
+                                samC2 = samM; // Don't want to lose too much sequin reads. Calibrate to sample median
+                                if (o.debug) { o.logInfo("Custom 1.2"); }
                             }
                         }
                         
                         // Scenario 2
                         else if (samC1 > seqC)
                         {
-                            // Calibrate to sample median
-                            samC2 = samM;
+                            samC2 = samM; // Calibrate to sample median
+                            if (o.debug) { o.logInfo("Custom 2.1"); }
                         }
                     }
                     
                     if (o.debug)
                     {
                         o.logInfo("Sample: " + std::to_string(samC2) + " for " + name);
+                        o.logInfo("Sequin: " + std::to_string(seqC)  + " for " + name);
                     }
 
                     // Calibrate by sample coverage
