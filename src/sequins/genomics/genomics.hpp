@@ -201,6 +201,9 @@ namespace Anaquin
         
         // How sequin mirror calibration is performed
         CalibrateMethod meth = CalibrateMethod::Mean;
+        
+        // Only for Method::Custom
+        double customSequinThreshold = 0;
 
         static GDecoyOptions create(const FileName &, const AnalyzerOptions &);
         static GDecoyOptions create(const FileName &writeS,
