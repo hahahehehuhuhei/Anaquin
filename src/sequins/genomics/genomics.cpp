@@ -852,7 +852,7 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
                         // Scenario 2
                         else if (samC1 > seqC)
                         {
-                            samC2 = samM; // Calibrate to sample median
+                            samC2 = seqC; // No calibration
                             if (o.debug) { o.logInfo("Custom 2.1"); }
                         }
                     }
