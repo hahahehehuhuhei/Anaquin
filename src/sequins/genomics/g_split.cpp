@@ -511,6 +511,13 @@ void GSplit::report(const FileName &f1, const FileName &f2, const Options &o)
     
     const auto tmp = tmpFile();
     
+    if (o.debug)
+    {
+        writeKmers(o.work + "/split_S1_kmers.tsv", stats.S1, o);
+        writeKmers(o.work + "/split_S2_kmers.tsv", stats.S2, o);
+        writeKmers(o.work + "/split_S3_kmers.tsv", stats.S3, o);
+    }
+    
     RGrep(o.work + "/split_variant.tsv", tmp, "LABEL", "Somatic");
     
     // Generating split_variant_table.tsv
