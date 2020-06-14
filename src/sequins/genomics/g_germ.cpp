@@ -219,53 +219,54 @@ static void writeSummary(const FileName &file,
                    "Reference regions:               %5%\n"
                    "Reference stratification:        %6%\n"
                    "Input variant file:              %7%\n"
-                   "TP sequin variants:              %8%\n"
-                   "FP sequin variants:              %9%\n"
-                   "FN sequin variants:              %10%\n\n"
+                   "Detected sample variants:        %8%\n"
+                   "TP sequin variants:              %9%\n"
+                   "FP sequin variants:              %10%\n"
+                   "FN sequin variants:              %11%\n\n"
                    "2. GERMLINE VARIANTS\n"
-                   "Detected sequin variants (TP):   %11%\n"
-                   "Undetected sequin variants (FN): %12%\n"
-                   "Erroneous sequin variants (FP):  %13%\n"
-                   "Sensitivity (SN):                %14%\n"
-                   "Precision (PC):                  %15%\n"
-                   "TP median depth:                 %16%\n"
-                   "TP median QUAL score (TPMQ):     %17%\n"
-                   "FP median depth:                 %18%\n"
-                   "FP median QUAL score (FPMQ):     %19%\n"
-                   "Analysed region size:            %20%\n"
-                   "False positives per KB:          %21%\n\n"
+                   "Detected sequin variants (TP):   %12%\n"
+                   "Undetected sequin variants (FN): %13%\n"
+                   "Erroneous sequin variants (FP):  %14%\n"
+                   "Sensitivity (SN):                %15%\n"
+                   "Precision (PC):                  %16%\n"
+                   "TP median depth:                 %17%\n"
+                   "TP median QUAL score (TPMQ):     %18%\n"
+                   "FP median depth:                 %19%\n"
+                   "FP median QUAL score (FPMQ):     %20%\n"
+                   "Analysed region size:            %21%\n"
+                   "False positives per KB:          %22%\n\n"
                    "3. SNVs                          TP; FN; FP; SN; PC; TPMQ; FPMQ\n"
-                   "Total:                           %22%\n"
-                   "Homozygous:                      %23%\n"
-                   "Heterozygous:                    %24%\n"
-                   "High GC (>70%%):                  %25%\n"
-                   "Moderate GC (30-70%%):            %26%\n"
-                   "Low GC (<30%%):                   %27%\n"
-                   "High confidence:                 %28%\n"
-                   "Low confidence:                  %29%\n"
-                   "Coding:                          %30%\n"
-                   "Noncoding:                       %31%\n"
-                   "ACMG genes:                      %32%\n"
-                   "Pharmacogenes:                   %33%\n"
-                   "Simple repeats:                  %34%\n"
-                   "5-12nt homopolymer:              %35%\n"
-                   ">12nt homopolymer:               %36%\n\n"
+                   "Total:                           %23%\n"
+                   "Homozygous:                      %24%\n"
+                   "Heterozygous:                    %25%\n"
+                   "High GC (>70%%):                  %26%\n"
+                   "Moderate GC (30-70%%):            %27%\n"
+                   "Low GC (<30%%):                   %28%\n"
+                   "High confidence:                 %29%\n"
+                   "Low confidence:                  %30%\n"
+                   "Coding:                          %31%\n"
+                   "Noncoding:                       %32%\n"
+                   "ACMG genes:                      %33%\n"
+                   "Pharmacogenes:                   %34%\n"
+                   "Simple repeats:                  %35%\n"
+                   "5-12nt homopolymer:              %36%\n"
+                   ">12nt homopolymer:               %37%\n\n"
                    "4. INDELS                        TP; FN; FP; SN; PC; TPMQ; FPMQ\n"
-                   "Total:                           %37%\n"
-                   "Homozygous:                      %38%\n"
-                   "Heterozygous:                    %39%\n"
-                   "High GC (>70%%):                  %40%\n"
-                   "Moderate GC (30-70%%):            %41%\n"
-                   "Low GC (<30%%):                   %42%\n"
-                   "High confidence:                 %43%\n"
-                   "Low confidence:                  %44%\n"
-                   "Coding:                          %45%\n"
-                   "Noncoding:                       %46%\n"
-                   "ACMG genes:                      %47%\n"
-                   "Pharmacogenes:                   %48%\n"
-                   "Simple repeats:                  %49%\n"
-                   "5-12nt homopolymer:              %50%\n"
-                   ">12nt homopolymer:               %51%";
+                   "Total:                           %38%\n"
+                   "Homozygous:                      %39%\n"
+                   "Heterozygous:                    %40%\n"
+                   "High GC (>70%%):                  %41%\n"
+                   "Moderate GC (30-70%%):            %42%\n"
+                   "Low GC (<30%%):                   %43%\n"
+                   "High confidence:                 %44%\n"
+                   "Low confidence:                  %45%\n"
+                   "Coding:                          %46%\n"
+                   "Noncoding:                       %47%\n"
+                   "ACMG genes:                      %48%\n"
+                   "Pharmacogenes:                   %49%\n"
+                   "Simple repeats:                  %50%\n"
+                   "5-12nt homopolymer:              %51%\n"
+                   ">12nt homopolymer:               %52%";
     
     auto S = [&](const GVariant::TableRow &x)
     {
@@ -286,50 +287,51 @@ static void writeSummary(const FileName &file,
                                       % r.r3()->src
                                       % r.a1()->src
                                       % (f1 + (f1.empty() ? "" : " and " + f2))
+                                      % (f2.empty() ? "NA" : S0(stats.hs.vs.size()))
                                       % (o.work + "/sequins_TP.vcf")
                                       % (o.work + "/sequins_FP.vcf")
                                       % (o.work + "/sequins_FN.vcf")
-                                      % stats.ds.oc.tp()     // 11
-                                      % stats.ds.oc.fn()     // 12
-                                      % stats.ds.oc.fp()     // 13
-                                      % S3(stats.ds.oc.sn()) // 14
-                                      % S3(stats.ds.oc.pc()) // 15
-                                      % (tpd.empty() ? MISSING : S2(med(tpd))) // 16
-                                      % (tpq.empty() ? MISSING : S2(med(tpq))) // 17
-                                      % (fpd.empty() ? MISSING : S2(med(fpd))) // 18
-                                      % (fpq.empty() ? MISSING : S2(med(fpq))) // 19
-                                      % sl                                     // 20
-                                      % S4(1000.0 * ((Proportion) stats.ds.oc.fp() / sl)) // 21
-                                      % S(GVariant::getSNV(o))                  // 22
-                                      % S(GVariant::getHom(o, "SNP"))           // 23
-                                      % S(GVariant::getHet(o, "SNP"))           // 24
-                                      % S(GVariant::getHighGC(o, "SNP"))        // 25
-                                      % S(GVariant::getModGC(o, "SNP"))         // 26
-                                      % S(GVariant::getLowGC(o, "SNP"))         // 27
-                                      % S(GVariant::getHighConf(o, "SNP"))      // 28
-                                      % S(GVariant::getLowConf(o, "SNP"))       // 29
-                                      % S(GVariant::getCode(o, "SNP"))          // 30
-                                      % S(GVariant::getNCode(o, "SNP"))         // 31
-                                      % S(GVariant::getACMG(o, "SNP"))          // 32
-                                      % S(GVariant::getPGX(o, "SNP"))           // 33
-                                      % S(GVariant::getRepeat(o, "SNP"))        // 34
-                                      % S(GVariant::getShortRepeat(o, "SNP"))   // 35
-                                      % S(GVariant::getLongRepeat(o, "SNP"))    // 36
-                                      % S(GVariant::getIndel(o))                // 37
-                                      % S(GVariant::getHom(o, "Indel"))         // 38
-                                      % S(GVariant::getHet(o, "Indel"))         // 39
-                                      % S(GVariant::getHighGC(o, "Indel"))      // 40
-                                      % S(GVariant::getModGC(o, "Indel"))       // 41
-                                      % S(GVariant::getLowGC(o, "Indel"))       // 42
-                                      % S(GVariant::getHighConf(o, "Indel"))    // 43
-                                      % S(GVariant::getLowConf(o, "Indel"))     // 44
-                                      % S(GVariant::getCode(o, "Indel"))        // 45
-                                      % S(GVariant::getNCode(o, "Indel"))       // 46
-                                      % S(GVariant::getACMG(o, "Indel"))        // 47
-                                      % S(GVariant::getPGX(o, "Indel"))         // 48
-                                      % S(GVariant::getRepeat(o, "Indel"))      // 49
-                                      % S(GVariant::getShortRepeat(o, "Indel")) // 50
-                                      % S(GVariant::getLongRepeat(o, "Indel"))  // 51
+                                      % stats.ds.oc.tp()     // 12
+                                      % stats.ds.oc.fn()     // 13
+                                      % stats.ds.oc.fp()     // 14
+                                      % S3(stats.ds.oc.sn()) // 15
+                                      % S3(stats.ds.oc.pc()) // 16
+                                      % (tpd.empty() ? MISSING : S2(med(tpd))) // 17
+                                      % (tpq.empty() ? MISSING : S2(med(tpq))) // 18
+                                      % (fpd.empty() ? MISSING : S2(med(fpd))) // 19
+                                      % (fpq.empty() ? MISSING : S2(med(fpq))) // 20
+                                      % sl                                     // 21
+                                      % S4(1000.0 * ((Proportion) stats.ds.oc.fp() / sl)) // 22
+                                      % S(GVariant::getSNV(o))                  // 23
+                                      % S(GVariant::getHom(o, "SNP"))           // 24
+                                      % S(GVariant::getHet(o, "SNP"))           // 25
+                                      % S(GVariant::getHighGC(o, "SNP"))        // 26
+                                      % S(GVariant::getModGC(o, "SNP"))         // 27
+                                      % S(GVariant::getLowGC(o, "SNP"))         // 28
+                                      % S(GVariant::getHighConf(o, "SNP"))      // 29
+                                      % S(GVariant::getLowConf(o, "SNP"))       // 30
+                                      % S(GVariant::getCode(o, "SNP"))          // 31
+                                      % S(GVariant::getNCode(o, "SNP"))         // 32
+                                      % S(GVariant::getACMG(o, "SNP"))          // 33
+                                      % S(GVariant::getPGX(o, "SNP"))           // 34
+                                      % S(GVariant::getRepeat(o, "SNP"))        // 35
+                                      % S(GVariant::getShortRepeat(o, "SNP"))   // 36
+                                      % S(GVariant::getLongRepeat(o, "SNP"))    // 37
+                                      % S(GVariant::getIndel(o))                // 38
+                                      % S(GVariant::getHom(o, "Indel"))         // 39
+                                      % S(GVariant::getHet(o, "Indel"))         // 40
+                                      % S(GVariant::getHighGC(o, "Indel"))      // 41
+                                      % S(GVariant::getModGC(o, "Indel"))       // 42
+                                      % S(GVariant::getLowGC(o, "Indel"))       // 43
+                                      % S(GVariant::getHighConf(o, "Indel"))    // 44
+                                      % S(GVariant::getLowConf(o, "Indel"))     // 45
+                                      % S(GVariant::getCode(o, "Indel"))        // 46
+                                      % S(GVariant::getNCode(o, "Indel"))       // 47
+                                      % S(GVariant::getACMG(o, "Indel"))        // 48
+                                      % S(GVariant::getPGX(o, "Indel"))         // 49
+                                      % S(GVariant::getRepeat(o, "Indel"))      // 50
+                                      % S(GVariant::getShortRepeat(o, "Indel")) // 51
+                                      % S(GVariant::getLongRepeat(o, "Indel"))  // 52
                      ).str());
     o.writer->close();
 }
