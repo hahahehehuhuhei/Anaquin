@@ -49,7 +49,7 @@ typedef std::string Value;
 
 static Build __ha__;
 
-static std::string version() { return "3.20.0"; }
+static std::string version() { return "HACK"; }
 
 /*
  * Options specified in the command line
