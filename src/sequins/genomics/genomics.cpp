@@ -700,6 +700,7 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
     {
         logRun([&]()
         {
+            // Default calibration method
             LadderCalibrator::createBAM(_o_.inputL2, writeL2)->calibrate(o_);
         }, o, "Started ladder calibration", "Completed ladder calibration");
     }
