@@ -62,6 +62,7 @@ GCalibrate::Stats GCalibrate::analyze(const FileName &f1, const FileName &f2, co
         m1("broadBAM_synthetic.tsv", "calibrate_synthetic.tsv");
         m1("broadBAM_errors.tsv",    "calibrate_errors.tsv");
         m1("broadBAM_features.tsv",  "calibrate_features.tsv");
+        mergeL(o.work + "/calibrate_synthetic.tsv", o.work + "/calibrate_synthetic.tsv");
     }
 
     return GCalibrate::Stats();
