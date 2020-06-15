@@ -60,6 +60,8 @@ void LadderCalibrator::getNorms(const Options &o, Results &r)
             
         case Method::SampleCNV2:
         {
+            o.d1->sampC = 40;
+            
             o.info("Sample coverage: " + std::to_string(o.d1->sampC));
             assert(!o.d1->tsvL.empty());
             const auto tmp1 = tmpFile();
