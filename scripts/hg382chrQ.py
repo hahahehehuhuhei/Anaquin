@@ -62,4 +62,4 @@ else:
                     break
         
             if not found:
-                raise Exception("Failed to find intersection for: [" + line.strip() + "]")
+                raise Exception("Failed to find intersection for: [" + line.replace("\t", " ").strip() + "]")
