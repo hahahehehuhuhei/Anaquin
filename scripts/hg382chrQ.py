@@ -5,7 +5,7 @@
 import sys
 
 if len(sys.argv) != 4:
-    print("\nUsage: python hg382chrQ.py <Sequin_HG38_BED> <Sequin_ChrQ_BED> <Input BED in HG38>\n\nThe script will convert between hg38 to chrQ coordinates. It is important to note the hg38 coordinates must overlap with <Sequin_HG38_BED> BED file.\nCopy and paste the commands below for a sample demo. Note the input BED file is in hg38 but the output will be in chrQ.:\n\nwget https://raw.githubusercontent.com/sequinstandards/Anaquin/master/data/genome/hg38/sequin_regions_hg38_2.6.bed\nwget https://raw.githubusercontent.com/sequinstandards/Anaquin/master/data/genome/chrQ/sequin_regions_chrQ_2.7.bed\nwget https://raw.githubusercontent.com/sequinstandards/Anaquin/master/test/A.bed\npython hg382chrQ.py sequin_regions_hg38_2.6.bed sequin_regions_chrQ_2.7.bed hg38.bed\n")
+    print("\nUsage: python hg382chrQ.py <Sequin_HG38_BED> <Sequin_ChrQ_BED> <Input BED in HG38>\n\nThe script will convert between hg38 to chrQ coordinates. It is important to note the hg38 coordinates must overlap with <Sequin_HG38_BED> BED file.\nCopy and paste the commands below for a sample demo. Note the input BED file is in hg38 but the output will be in chrQ.:\n\nwget https://raw.githubusercontent.com/sequinstandards/Anaquin/master/data/genome/hg38/sequin_regions_hg38_2.6.bed\nwget https://raw.githubusercontent.com/sequinstandards/Anaquin/master/data/genome/chrQ/sequin_regions_chrQ_2.7.bed\nwget https://raw.githubusercontent.com/sequinstandards/Anaquin/master/test/hg38.bed\npython hg382chrQ.py sequin_regions_hg38_2.6.bed sequin_regions_chrQ_2.7.bed hg38.bed\n")
 else:
     hg38 = sys.argv[1]
     chrQ = sys.argv[2]
