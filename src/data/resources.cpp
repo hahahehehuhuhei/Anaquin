@@ -76,6 +76,7 @@ Scripts Anaquin::rna()       { return ToString(data_manuals_rna_txt);       }
 Scripts Anaquin::meta()      { return ToString(data_manuals_meta_txt);      }
 Scripts Anaquin::norm()      { return ToString(data_manuals_norm_txt);      }
 Scripts Anaquin::split()     { return ToString(data_manuals_split_txt);     }
+Scripts Anaquin::cancer()    { return "";     }
 Scripts Anaquin::somatic()   { return ToString(data_manuals_somatic_txt);   }
 Scripts Anaquin::germline()  { return ToString(data_manuals_germline_txt);  }
 Scripts Anaquin::calibrate() { return ToString(data_manuals_calibrate_txt); }

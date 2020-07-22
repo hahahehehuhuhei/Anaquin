@@ -127,6 +127,7 @@ static std::map<Value, Tool> _tools =
     { "split",     Tool::Split     },
     { "germline",  Tool::Germline  },
     { "somatic",   Tool::Somatic   },
+    { "cancer",    Tool::Cancer    },
     { "calibrate", Tool::Calibrate },
     { "broad_bam", Tool::BroadBAM  },
     { "broad_vcf", Tool::BroadVCF  }
@@ -332,6 +333,7 @@ static Scripts manual(Tool tool)
         case Tool::Meta:      { return meta();      }
         case Tool::Norm:      { return norm();      }
         case Tool::Split:     { return split();     }
+        case Tool::Cancer:    { return cancer();    }
         case Tool::Somatic:   { return somatic();   }
         case Tool::Germline:  { return germline();  }
         case Tool::Calibrate: { return calibrate(); }
@@ -669,6 +671,7 @@ void parse(int argc, char ** argv)
             {
                 switch (_p.tool)
                 {
+                    case Tool::Cancer:
                     case Tool::Somatic:
                     case Tool::Germline:
                     case Tool::Calibrate: { _p.opts[opt] = val; break; }
@@ -765,6 +768,7 @@ void parse(int argc, char ** argv)
     #define GFeatBED_(x)   (GFeatBED(_p.opts.at(OPT_RESOURCE), x).path)
     #define GLTSV(x)       (GSynTSV(_p.opts.at(OPT_RESOURCE)).path)
     #define GAttrBED_(x)   (GAttrBED(_p.opts.at(OPT_RESOURCE)).path)
+    #define CRegionBED_(x) (CRegionBED(_p.opts.at(OPT_RESOURCE), x).path)
     #define GRegionBED_(x) (GRegionBED(_p.opts.at(OPT_RESOURCE), x).path)
     #define GVCF(x)        (GVarVCF(_p.opts.at(OPT_RESOURCE), x).path)
     #define RSFA()         (RNAFA(_p.opts.at(OPT_RESOURCE)).path)
@@ -790,6 +794,7 @@ void parse(int argc, char ** argv)
         case Tool::Meta:
         case Tool::Norm:
         case Tool::Split:
+        case Tool::Cancer:
         case Tool::Somatic:
         case Tool::Germline:
         case Tool::BroadBAM:
@@ -799,22 +804,33 @@ void parse(int argc, char ** argv)
             switch (_p.tool)
             {
                 case Tool::Split:
+                case Tool::Cancer:
                 case Tool::BroadBAM:
                 case Tool::Calibrate:
                 {
-                    const auto edge  = _p.opts.count(OPT_EDGE)   ? stoi(_p.opts[OPT_EDGE]) : DEFAULT_EDGE;
+                    const auto edge  = _p.opts.count(OPT_EDGE)  ? stoi(_p.opts[OPT_EDGE]) : DEFAULT_EDGE;
                     const auto build = _p.opts.count(OPT_BUILD) ? parseBuild(_p.opts.at(OPT_BUILD)) :  (_p.opts.count(OPT_COMBINE) ? Detector::fromBAM(_p.opts.at(OPT_COMBINE)) : Build::hg38);
                     
                     const auto bothHR = _p.opts.count(OPT_SAMPLE) && _p.opts.count(OPT_SEQUIN);
                     
-                    const auto hr = _p.opts.count(OPT_R_BED) ? _p.opts[OPT_R_BED] :
-                                    _p.opts.count(OPT_R_HUMAN) ? _p.opts[OPT_R_HUMAN] : GRegionBED_(build);
-                    const auto dr = _p.opts.count(OPT_R_BED) ? _p.opts[OPT_R_BED] :
-                                    _p.opts.count(OPT_R_DECOY) ? _p.opts[OPT_R_DECOY] : !bothHR ? GRegionBED_(Build::chrQ) : GRegionBED_(build);
+                    auto gb1 = GRegionBED_(build);
+                    auto gb2 = GRegionBED_(Build::chrQ);
                     
+                    // For example, restricted regions will always be on "cancer"
+                    if (_p.tool == Tool::Cancer)
+                    {
+                        gb1 = CRegionBED_(build);
+                        gb2 = CRegionBED_(Build::chrQ);
+                    }
+
+                    const auto hr = _p.opts.count(OPT_R_BED)   ? _p.opts[OPT_R_BED] :
+                                    _p.opts.count(OPT_R_HUMAN) ? _p.opts[OPT_R_HUMAN] : gb1;
+                    const auto dr = _p.opts.count(OPT_R_BED)   ? _p.opts[OPT_R_BED] :
+                                    _p.opts.count(OPT_R_DECOY) ? _p.opts[OPT_R_DECOY] : !bothHR ? gb2 : gb1;
+
                     // Restricted regions
-                    const auto rr = _p.opts.count(OPT_R_REGS)  ? _p.opts[OPT_R_REGS] : dr;
-                    
+                    auto rr = _p.opts.count(OPT_R_REGS) ? _p.opts[OPT_R_REGS] : dr;
+
                     if (dr == rr)
                     {
                         RegionOptions o;
@@ -1247,6 +1263,7 @@ void parse(int argc, char ** argv)
                     break;
                 }
 
+                case Tool::Cancer:
                 case Tool::Calibrate:
                 {
                     typedef GCalibrate::Method Method;
@@ -1259,7 +1276,8 @@ void parse(int argc, char ** argv)
                     o.writeS = _p.opts.count(OPT_ONLY_S);
                     o.writeD = _p.opts.count(OPT_ONLY_D);
                     o.writeC = _p.opts.count(OPT_ONLY_C);
-                    
+                    o.isCancer = _p.tool == Tool::Cancer;
+
                     // How to calibrate?
                     const auto meth = _p.opts.count(OPT_METHOD) ? _p.opts[OPT_METHOD] : "mean";
                     
@@ -1280,7 +1298,7 @@ void parse(int argc, char ** argv)
                     {
                         throw std::runtime_error("Unknown method: " + meth);
                     }
-
+                    
                     if (o.bam)
                     {
                         analyze_1<GCalibrate>("calibrate", OPT_COMBINE, o);

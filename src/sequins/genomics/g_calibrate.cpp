@@ -53,7 +53,14 @@ GCalibrate::Stats GCalibrate::analyze(const FileName &f1, const FileName &f2, co
         m1("merged.bam", "merged.bam");
     }
     
-    m1("broad_bam.txt", "calibrate_report.txt");
+    if (o.isCancer)
+    {
+        m1("broad_bam.txt", "cancer_report.txt");
+    }
+    else
+    {
+        m1("broad_bam.txt", "calibrate_report.txt");
+    }
 
     if (o.debug)
     {

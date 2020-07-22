@@ -38,6 +38,9 @@ namespace Anaquin
             // Defined only if meth==Reads
             Count reads = 0;
             
+            // The specialized cancer tool?
+            bool isCancer = false;
+            
             bool writeS = false;
             bool writeD = false;
             bool writeC = false;

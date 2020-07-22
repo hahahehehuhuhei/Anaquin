@@ -37,6 +37,11 @@ namespace Anaquin
         return GResource(p + "/genome", "sequin_sequences", ".fa", Build::None);
     }
 
+    inline Resource CRegionBED(const Path &p, Build x)
+    {
+        return GResource(p + "/cancer", "sequin_regions", ".bed", x);
+    }
+
     inline Resource GRegionBED(const Path &p, Build x)
     {
         return GResource(p + "/genome", "sequin_regions", ".bed", x);

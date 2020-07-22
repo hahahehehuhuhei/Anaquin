@@ -22,6 +22,7 @@ namespace Anaquin
     Scripts meta();
     Scripts norm();
     Scripts split();
+    Scripts cancer();
     Scripts somatic();
     Scripts broadBAM();
     Scripts broadVCF();
