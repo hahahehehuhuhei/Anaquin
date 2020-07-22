@@ -763,16 +763,17 @@ void parse(int argc, char ** argv)
     __outputW__ = std::shared_ptr<TerminalWriter>(new TerminalWriter());
     __loggerW__->open("anaquin.log");
     
-    #define GSFA()         (GSeqFA(_p.opts.at(OPT_RESOURCE)).path)
-    #define GDFA()         (GSeqDecoy(_p.opts.at(OPT_RESOURCE)).path)
-    #define GFeatBED_(x)   (GFeatBED(_p.opts.at(OPT_RESOURCE), x).path)
-    #define GLTSV(x)       (GSynTSV(_p.opts.at(OPT_RESOURCE)).path)
-    #define GAttrBED_(x)   (GAttrBED(_p.opts.at(OPT_RESOURCE)).path)
-    #define CRegionBED_(x) (CRegionBED(_p.opts.at(OPT_RESOURCE), x).path)
-    #define GRegionBED_(x) (GRegionBED(_p.opts.at(OPT_RESOURCE), x).path)
-    #define GVCF(x)        (GVarVCF(_p.opts.at(OPT_RESOURCE), x).path)
-    #define RSFA()         (RNAFA(_p.opts.at(OPT_RESOURCE)).path)
-    #define RDFA()         (RNADecoy(_p.opts.at(OPT_RESOURCE)).path)
+    #define GSFA()          (GSeqFA(_p.opts.at(OPT_RESOURCE)).path)
+    #define GDFA()          (GSeqDecoy(_p.opts.at(OPT_RESOURCE)).path)
+    #define GFeatBED_(x)    (GFeatBED(_p.opts.at(OPT_RESOURCE), x).path)
+    #define GLTSV(x)        (GSynTSV(_p.opts.at(OPT_RESOURCE)).path)
+    #define GAttrBED_(x)    (GAttrBED(_p.opts.at(OPT_RESOURCE)).path)
+    #define CCaptureBED_(x) (CCaptureBED(_p.opts.at(OPT_RESOURCE), x).path)
+    #define CRegionBED_(x)  (CRegionBED(_p.opts.at(OPT_RESOURCE), x).path)
+    #define GRegionBED_(x)  (GRegionBED(_p.opts.at(OPT_RESOURCE), x).path)
+    #define GVCF(x)         (GVarVCF(_p.opts.at(OPT_RESOURCE), x).path)
+    #define RSFA()          (RNAFA(_p.opts.at(OPT_RESOURCE)).path)
+    #define RDFA()          (RNADecoy(_p.opts.at(OPT_RESOURCE)).path)
 
     auto initAR = [&](UserReference &r)
     {
@@ -812,24 +813,18 @@ void parse(int argc, char ** argv)
                     const auto build = _p.opts.count(OPT_BUILD) ? parseBuild(_p.opts.at(OPT_BUILD)) :  (_p.opts.count(OPT_COMBINE) ? Detector::fromBAM(_p.opts.at(OPT_COMBINE)) : Build::hg38);
                     
                     const auto bothHR = _p.opts.count(OPT_SAMPLE) && _p.opts.count(OPT_SEQUIN);
-                    
-                    auto gb1 = GRegionBED_(build);
-                    auto gb2 = GRegionBED_(Build::chrQ);
-                    
-                    // For example, restricted regions will always be on "cancer"
-                    if (_p.tool == Tool::Cancer)
-                    {
-                        gb1 = CRegionBED_(build);
-                        gb2 = CRegionBED_(Build::chrQ);
-                    }
+                    const bool isCancer = _p.tool == Tool::Cancer;
 
+                    const auto gb1 = isCancer ? CRegionBED_(build) : GRegionBED_(build);
+                    const auto gb2 = isCancer ? CRegionBED_(Build::chrQ) : GRegionBED_(Build::chrQ);
+                    
                     const auto hr = _p.opts.count(OPT_R_BED)   ? _p.opts[OPT_R_BED] :
                                     _p.opts.count(OPT_R_HUMAN) ? _p.opts[OPT_R_HUMAN] : gb1;
                     const auto dr = _p.opts.count(OPT_R_BED)   ? _p.opts[OPT_R_BED] :
                                     _p.opts.count(OPT_R_DECOY) ? _p.opts[OPT_R_DECOY] : !bothHR ? gb2 : gb1;
 
                     // Restricted regions
-                    auto rr = _p.opts.count(OPT_R_REGS) ? _p.opts[OPT_R_REGS] : dr;
+                    auto rr = _p.opts.count(OPT_R_REGS) ? _p.opts[OPT_R_REGS] : (isCancer ? CCaptureBED_(build) : dr);
 
                     if (dr == rr)
                     {
