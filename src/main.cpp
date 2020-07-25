@@ -49,7 +49,7 @@ typedef std::string Value;
 
 static Build __ha__;
 
-static std::string version() { return "3.20.0"; }
+static std::string version() { return "3.22.0"; }
 
 /*
  * Options specified in the command line
@@ -768,7 +768,6 @@ void parse(int argc, char ** argv)
     #define GFeatBED_(x)    (GFeatBED(_p.opts.at(OPT_RESOURCE), x).path)
     #define GLTSV(x)        (GSynTSV(_p.opts.at(OPT_RESOURCE)).path)
     #define GAttrBED_(x)    (GAttrBED(_p.opts.at(OPT_RESOURCE)).path)
-    #define CCaptureBED_(x) (CCaptureBED(_p.opts.at(OPT_RESOURCE), x).path)
     #define CRegionBED_(x)  (CRegionBED(_p.opts.at(OPT_RESOURCE), x).path)
     #define GRegionBED_(x)  (GRegionBED(_p.opts.at(OPT_RESOURCE), x).path)
     #define GVCF(x)         (GVarVCF(_p.opts.at(OPT_RESOURCE), x).path)
@@ -824,7 +823,7 @@ void parse(int argc, char ** argv)
                                     _p.opts.count(OPT_R_DECOY) ? _p.opts[OPT_R_DECOY] : !bothHR ? gb2 : gb1;
 
                     // Restricted regions
-                    auto rr = _p.opts.count(OPT_R_REGS) ? _p.opts[OPT_R_REGS] : (isCancer ? CCaptureBED_(build) : dr);
+                    auto rr = _p.opts.count(OPT_R_REGS) ? _p.opts[OPT_R_REGS] : dr;
 
                     if (dr == rr)
                     {
