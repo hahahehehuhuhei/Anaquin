@@ -21,15 +21,6 @@ data  = [ "data/manuals/anaquin.txt",
           "data/manuals/broad_vcf.txt",         
 
           "scripts/report.py",
-          "scripts/template/norm.html",          
-          "scripts/template/calibrate.html",          
-          "scripts/template/gSplit.html",
-          "scripts/template/rSplit.html",
-          "scripts/template/mSplit.html",
-          "scripts/template/somatic.html",          
-          "scripts/template/germline.html",
-          "scripts/template/style.css",
-
           "src/r/plotGene.R",
           "src/r/plotNorm.R",
           "src/r/plotInsert.R",
@@ -68,4 +59,4 @@ for i in range(0, len(data)):
     checkEOF(data[i])    
     xxd(data[i], dst)
 
-os.system("rm src/data/resources.o")
+os.system("rm -f src/data/resources.o")

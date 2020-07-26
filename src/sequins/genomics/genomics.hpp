@@ -47,6 +47,11 @@ namespace Anaquin
         return GResource(p + "/genome", "sequin_regions", ".bed", x);
     }
 
+    inline Resource CVarVCF(const Path &p, Build x)
+    {
+        return GResource(p + "/cancer", "sequin_smallvariants", ".vcf", x);
+    }
+
     inline Resource GVarVCF(const Path &p, Build x)
     {
         return GResource(p + "/genome", "sequin_smallvariants", ".vcf", x);

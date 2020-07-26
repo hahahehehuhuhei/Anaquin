@@ -218,7 +218,7 @@ void GDecoyResults::writeV(const GDecoyResults &r, const GDecoyOptions &o)
             const auto &V1 = X1 ? X1->V : 0;
             const auto &R2 = X2 ? X2->R : 0;
             const auto &V2 = X2 ? X2->V : 0;
-
+            
             o.writer->write((boost::format(f) % i.name
                                               % bin2Label(GBin(i.name))
                                               % i.cID
@@ -778,11 +778,6 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
             
             if (o.debug)
             {
-                //for (auto &i : samp.raws)
-                //{
-                //    o.logInfo("[DEBUG]: " + std::to_string(i));
-                //}
-
                 o.logInfo("Inside getNormFactors(). sample.mean = " + std::to_string(samp.mean));
                 o.logInfo("Inside getNormFactors(). sample.median = " + std::to_string(samp.p50));
             }
@@ -797,7 +792,6 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
                 for (auto &j : i.second.data())
                 {
                     const auto &name = j.second.id();
-                    
                     const auto before = r.before.r2.find(name);
                     
                     const auto m1 = o.meth != CalibrateMethod::Custom ? o.meth : CalibrateMethod::Mean;

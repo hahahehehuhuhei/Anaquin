@@ -770,6 +770,7 @@ void parse(int argc, char ** argv)
     #define GAttrBED_(x)    (GAttrBED(_p.opts.at(OPT_RESOURCE)).path)
     #define CRegionBED_(x)  (CRegionBED(_p.opts.at(OPT_RESOURCE), x).path)
     #define GRegionBED_(x)  (GRegionBED(_p.opts.at(OPT_RESOURCE), x).path)
+    #define CVCF(x)         (CVarVCF(_p.opts.at(OPT_RESOURCE), x).path)
     #define GVCF(x)         (GVarVCF(_p.opts.at(OPT_RESOURCE), x).path)
     #define RSFA()          (RNAFA(_p.opts.at(OPT_RESOURCE)).path)
     #define RDFA()          (RNADecoy(_p.opts.at(OPT_RESOURCE)).path)
@@ -852,14 +853,22 @@ void parse(int argc, char ** argv)
                     // Attributes on chrQS (hg19/hg38 not supported)
                     r.r5 = readR(GFeatBED_(!bothHR ? chrQ : build), RegionOptions()); // Never trimming
                     
-                    r.l1 = readL(std::bind(&Standard::addAF, &s, std::placeholders::_1), OPT_R_VCF, r, GVCF(Build::hg38));
-                    r.l2 = readTSV(Reader(option(OPT_ATTTSV, GAttrBED_())), r);
-                    r.l3 = readTSV(Reader(option(OPT_SYNC, GLTSV())), r, 2);
+                    const auto hg38V = isCancer ? CVCF(Build::hg38) : GVCF(Build::hg38);
+                    const auto chrQV = isCancer ? CVCF(Build::chrQ) : GVCF(Build::chrQ);
                     
-                    r.v1 = readV(OPT_R_VCF,  r, nullptr, GVCF(Build::hg38)); // All variants
-                    r.v2 = readGV(OPT_R_VCF, r, nullptr, GVCF(Build::hg38)); // Germline variants
-                    r.v3 = readSV(OPT_R_VCF, r, nullptr, GVCF(Build::hg38)); // Somatic variants
-                    r.v4 = readV(OPT_R_VCF,  r, nullptr, GVCF(Build::chrQ)); // All decoy variants
+                    /*
+                     * Allele frequency ladder, it's assumed that chrQ and hg38 encode the same AF so only the hg38
+                     * file is used. Locations will not be read.
+                     */
+                    
+                    r.l1 = readL(std::bind(&Standard::addAF, &s, std::placeholders::_1), OPT_R_VCF, r, hg38V);
+                    r.l2 = readTSV(Reader(option(OPT_ATTTSV, GAttrBED_())), r); // Attributes
+                    r.l3 = readTSV(Reader(option(OPT_SYNC, GLTSV())), r, 2); // Synthetuc ladder
+                    
+                    r.v1 = readV(OPT_R_VCF,  r, nullptr, hg38V); // All variants
+                    r.v2 = readGV(OPT_R_VCF, r, nullptr, hg38V); // Germline variants
+                    r.v3 = readSV(OPT_R_VCF, r, nullptr, hg38V); // Somatic variants
+                    r.v4 = readV(OPT_R_VCF,  r, nullptr, chrQV); // All decoy variants
 
                     break;
                 }

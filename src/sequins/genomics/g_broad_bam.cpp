@@ -13,7 +13,7 @@ GBroadBam::SomaticReport GBroadBam::reportS(const FileName &file)
     const auto tmp1 = tmpFile();
     const auto tmp2 = tmpFile();
     const auto tmp3 = tmpFile();
-
+    
     // Construct log-linear model
     RGrep(file, tmp1, "LABEL", "Somatic"); r.lm = RLinear(tmp1, "NAME", "EXP_FREQ", "OBS_FREQ_CALIB").linear(false);
     
@@ -38,10 +38,10 @@ GBroadBam::SomaticReport GBroadBam::reportS(const FileName &file)
     
     std::map<double, Data> m;
     
+    // For each allele frequency group...
     for (const auto &exp : exps)
     {
         RGrep(tmp1, tmp2, "EXP_FREQ", exp.first);
-        
         m[stod(exp.first)].ref = numeric<Count>(RList(tmp2, "REF_COUNT_CALIB"));
         m[stod(exp.first)].var = numeric<Count>(RList(tmp2, "VAR_COUNT_CALIB"));
         m[stod(exp.first)].obs = numeric<Proportion>(RList(tmp2, "OBS_FREQ_CALIB"));
@@ -51,7 +51,6 @@ GBroadBam::SomaticReport GBroadBam::reportS(const FileName &file)
     
     for (auto i = m.rbegin(); i != m.rend(); i++)
     {
-        //ss << extend(std::to_string(i->first), 15) << "\t"
         ss << (i != m.rbegin() ? "\n" : "")
            << std::to_string(i->first) << "\t"
            << (!i->second.obs.empty() ? S4(SS::mean(i->second.obs)) : "NA") << " ; "
