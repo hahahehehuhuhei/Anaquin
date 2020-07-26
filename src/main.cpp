@@ -339,7 +339,7 @@ static Scripts manual(Tool tool)
         case Tool::Calibrate: { return calibrate(); }
         case Tool::BroadBAM:  { return broadBAM();  }
         case Tool::BroadVCF:  { return broadVCF();  }
-        default:              { return "";          }
+        default:              { return cancer();    }
     }
 }
 

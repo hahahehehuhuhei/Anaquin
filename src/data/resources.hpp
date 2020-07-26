@@ -29,6 +29,7 @@ namespace Anaquin
     Scripts germline();
     Scripts partition();
     Scripts calibrate();
+    Scripts cancer();
     
     Scripts CSS();
     Scripts PReport();
