@@ -1,32 +1,12 @@
 cancer - Calibration and analysis of somatic sequin alignments (.bam) in human whole genome sequencing workflow.
 
 <b>USAGE EXAMPLE:</b>
-$ anaquin calibrate -b alignments.bam
+$ anaquin cancer -b alignments.bam
 
 <b>OPTIONS:</b>
         -b/--bam                        Alignment file (.BAM) to combined index comprising both human genome (hg38) and decoy chromosomes (chrQ*).
         -o/--output                     Directory to write output files to (default = output).
         -r/--resource_dir               Directory containing resource files (default = resources).
-        --calibration_method            Calibration method (default = mean). Possible values are "mean", "custom".
-                                        
-                                        Example usage of custom calibration method:
-                                        
-                                        anaquin calibrate ... --calibration_method custom --custom_sequin_threshold 30 ...
-                                        
-                                        The usage will allow Anaquin to calibrate sequin coverage to its corresponding sample if:
-                                        
-                                        - The sequin coverage is higher than the sample coverage
-                                        - The sample coverage is higher than 30
-        
-                                        Otherwise, Anaquin will calibrate sequin coverage to global sample median.
-                                        
-                                        For example, let's assume the global sample median (over all sequin regions) is 30.
-                                        
-                                        Case 1: sequin coverage = 100 and sample coverage = 1                                        
-                                                Anaquin will calibrate sequins to 30 (otherwise sequin reads will be lost if calibrating to 1).
-
-                                        Case 2: sequin coverage = 100 and sample coverage = 50                                        
-                                                Anaquin will calibrate sequins to 50.
         --sequin_alignment              Provide sequin alignment file (.BAM) that has been generated from sequin reads that have been mirrored (using split)
                                         and then aligned to the human genome (e.g. hg38). Use with --sample_alignments option.
         --sample_alignment              Provide sample alignments file (.BAM) that are generated from sample reads aligned to the human genome (e.g. hg38).
