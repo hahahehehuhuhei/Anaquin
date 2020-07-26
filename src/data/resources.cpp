@@ -13,15 +13,6 @@
 #include "resources/broad_vcf.txt"
 
 #include "resources/report.py"
-#include "resources/style.css"
-#include "resources/norm.html"
-#include "resources/gSplit.html"
-#include "resources/rSplit.html"
-#include "resources/mSplit.html"
-#include "resources/somatic.html"
-#include "resources/germline.html"
-#include "resources/calibrate.html"
-
 #include "resources/plotGene.R"
 #include "resources/plotNorm.R"
 #include "resources/plotAllele.R"
@@ -46,15 +37,7 @@ static std::string clean(const std::string &x)
 typedef std::string Scripts;
 #define ToString(x) clean(std::string(reinterpret_cast<char*>(x)))
 
-Scripts Anaquin::CSS()           { return ToString(scripts_template_style_css);      }
 Scripts Anaquin::PReport()       { return ToString(scripts_report_py);               }
-Scripts Anaquin::NormHTML()      { return ToString(scripts_template_norm_html);      }
-Scripts Anaquin::GermHTML()      { return ToString(scripts_template_germline_html);  }
-Scripts Anaquin::SomaHTML()      { return ToString(scripts_template_somatic_html);   }
-Scripts Anaquin::GSplitHTML()    { return ToString(scripts_template_gSplit_html);    }
-Scripts Anaquin::RSplitHTML()    { return ToString(scripts_template_rSplit_html);    }
-Scripts Anaquin::MSplitHTML()    { return ToString(scripts_template_mSplit_html);    }
-Scripts Anaquin::CalibrateHTML() { return ToString(scripts_template_calibrate_html); }
 
 Scripts Manual() { return ToString(data_manuals_anaquin_txt); }
 
