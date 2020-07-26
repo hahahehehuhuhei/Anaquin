@@ -1,7 +1,7 @@
 cancer - Calibration and analysis of somatic sequin alignments (.bam) in human whole genome sequencing workflow.
 
 <b>USAGE EXAMPLE:</b>
-$ anaquin calibrate -b alignments.bam
+$ anaquin cancer -b alignments.bam
 
 <b>OPTIONS:</b>
         -b/--bam                        Alignment file (.BAM) to combined index comprising both human genome (hg38) and decoy chromosomes (chrQ*).
