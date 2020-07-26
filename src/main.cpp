@@ -343,6 +343,8 @@ static Scripts manual(Tool tool)
     }
 }
 
+bool __HACK_IS_CANCER__ = false;
+
 inline std::string option(const Option &key, const Scripts &x = "")
 {
     return _p.opts.count(key) ? _p.opts[key] : x;
@@ -813,7 +815,7 @@ void parse(int argc, char ** argv)
                     const auto build = _p.opts.count(OPT_BUILD) ? parseBuild(_p.opts.at(OPT_BUILD)) :  (_p.opts.count(OPT_COMBINE) ? Detector::fromBAM(_p.opts.at(OPT_COMBINE)) : Build::hg38);
                     
                     const auto bothHR = _p.opts.count(OPT_SAMPLE) && _p.opts.count(OPT_SEQUIN);
-                    const bool isCancer = _p.tool == Tool::Cancer;
+                    const bool isCancer = __HACK_IS_CANCER__ = _p.tool == Tool::Cancer;
 
                     const auto gb1 = isCancer ? CRegionBED_(build) : GRegionBED_(build);
                     const auto gb2 = isCancer ? CRegionBED_(Build::chrQ) : GRegionBED_(Build::chrQ);

@@ -447,25 +447,29 @@ static void writeSummary(const FileName &file,
     const auto C = GBroadBam::reportC(o2.work + "/" + o2.tsvR, isChrQ);
     const auto L = GBroadBam::reportL(o2.work + "/" + o2.tsvL2);
     const auto M = GBroadBam::reportM(o2.work + "/" + o2.tsvR, r.t1());
+    
+    // Only after calibration. Neat mixture won't work.
     const auto E = GBroadBam::reportE(o2.work + "/" + o2.tsvE,
                                       o2.work + "/" + o2.tsvR,
                                       o2.work + "/" + o2.tsvF,
                                       true,
                                       isChrQ);
 
+    extern bool __HACK_IS_CANCER__;
+    
     o1.generate(file);
     o1.writer->open(file);
     o1.writer->write((boost::format(f) % date()                                 // 1
                                        % o1.version                             // 2
                                        % o1.cmd                                 // 3
-                                       % M.text                                 // 4
+                                       % (__HACK_IS_CANCER__ ? "v3" : M.text)   // 4
                                        % o1.index                               // 5
                                        % r.r2()->src                            // 6
                                        % r.r1()->src                            // 7
                                        % (f2.empty() ? f1 : f1 + " and " + f2)  // 8
-                                       % (origW + "/sequin.bam")              // 9
-                                       % (origW + "/sequin_calibrated.bam")   // 10
-                                       % (origW + "/merged.bam")              // 11
+                                       % (origW + "/sequin.bam")                // 9
+                                       % (origW + "/sequin_calibrated.bam")     // 10
+                                       % (origW + "/merged.bam")                // 11
                                        % rr.lib.inst(rr.lib.format())           // 12
                                        % rr.lib.run(rr.lib.format())            // 13
                                        % rr.lib.flow(rr.lib.format())           // 14
