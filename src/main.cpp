@@ -765,8 +765,10 @@ void parse(int argc, char ** argv)
     __outputW__ = std::shared_ptr<TerminalWriter>(new TerminalWriter());
     __loggerW__->open("anaquin.log");
     
+    #define CSFA()          (CSeqFA(_p.opts.at(OPT_RESOURCE)).path)
     #define GSFA()          (GSeqFA(_p.opts.at(OPT_RESOURCE)).path)
     #define GDFA()          (GSeqDecoy(_p.opts.at(OPT_RESOURCE)).path)
+    #define CDFA()          (CSeqDecoy(_p.opts.at(OPT_RESOURCE)).path)
     #define GFeatBED_(x)    (GFeatBED(_p.opts.at(OPT_RESOURCE), x).path)
     #define GLTSV(x)        (GSynTSV(_p.opts.at(OPT_RESOURCE)).path)
     #define GAttrBED_(x)    (GAttrBED(_p.opts.at(OPT_RESOURCE)).path)
@@ -1273,15 +1275,19 @@ void parse(int argc, char ** argv)
                 {
                     typedef GCalibrate::Method Method;
                     const auto isChrQ = _p.opts.count(OPT_COMBINE);
+                    const auto isCancer = _p.tool == Tool::Cancer;
+                    
+                    const auto f1 = isCancer ? CDFA() : GDFA();
+                    const auto f2 = isCancer ? CSFA() : GSFA();
                     
                     GCalibrate::Options o;
-                    initSOptions(o, isChrQ ? GDFA() : GSFA(), isChrQ ? GDFA() : GSFA());
+                    initSOptions(o, isChrQ ? f1 : f2, isChrQ ? f1 : f2);
                     o.edge = _p.opts.count(OPT_EDGE) ? stoi(_p.opts[OPT_EDGE]) : DEFAULT_EDGE;
                     
                     o.writeS = _p.opts.count(OPT_ONLY_S);
                     o.writeD = _p.opts.count(OPT_ONLY_D);
                     o.writeC = _p.opts.count(OPT_ONLY_C);
-                    o.isCancer = _p.tool == Tool::Cancer;
+                    o.isCancer = isCancer;
 
                     // How to calibrate?
                     const auto meth = _p.opts.count(OPT_METHOD) ? _p.opts[OPT_METHOD] : "mean";

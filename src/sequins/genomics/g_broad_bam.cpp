@@ -507,7 +507,7 @@ static void writeSummary(const FileName &file,
 }
 
 void GBroadBam::report(const FileName &f1, const FileName &f2, const Options &o1)
-{
+{    
     GDecoyOptions o2;
     
     if (o1.debug) { o2.work = o1.work;   } // Always write to working directory if debug

@@ -32,6 +32,16 @@ namespace Anaquin
         return GResource(p + "/genome/chrQ", "genome_chrQ_decoys", ".fa", Build::None);
     }
 
+    inline Resource CSeqDecoy(const Path &p)
+    {
+        return GResource(p + "/cancer/chrQ", "genome_chrQ_decoys", ".fa", Build::None);
+    }
+
+    inline Resource CSeqFA(const Path &p)
+    {
+        return GResource(p + "/cancer", "sequin_sequences", ".fa", Build::None);
+    }
+
     inline Resource GSeqFA(const Path &p)
     {
         return GResource(p + "/genome", "sequin_sequences", ".fa", Build::None);

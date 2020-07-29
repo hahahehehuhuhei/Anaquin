@@ -214,11 +214,16 @@ void GDecoyResults::writeV(const GDecoyResults &r, const GDecoyOptions &o)
             const auto X1 = r.bAF.find(noPID(i.name));
             const auto X2 = r.aAF.find(noPID(i.name));
 
-            const auto &R1 = X1 ? X1->R : 0;
-            const auto &V1 = X1 ? X1->V : 0;
-            const auto &R2 = X2 ? X2->R : 0;
-            const auto &V2 = X2 ? X2->V : 0;
-            
+            const auto &R1 = X1 ? X1->R : 0; // Reference counts before calibration
+            const auto &V1 = X1 ? X1->V : 0; // Reference counts before calibration
+            const auto &R2 = X2 ? X2->R : 0; // Variant counts after calibration
+            const auto &V2 = X2 ? X2->V : 0; // Variant counts after calibration
+
+            assert(R1 >= 0);
+            assert(R2 >= 0);
+            assert(V1 >= 0);
+            assert(V2 >= 0);
+
             o.writer->write((boost::format(f) % i.name
                                               % bin2Label(GBin(i.name))
                                               % i.cID
@@ -402,6 +407,8 @@ std::map<SequinID, GDecoyResults::VariantData> GDecoyResults::buildAF(const Deco
                 {
                     mm[v.name].R = f1(x.sd.at("All").match);
                     mm[v.name].V = f2(x.sd.at("All").snps);
+                    assert(mm[v.name].R >= 0);
+                    assert(mm[v.name].V >= 0);
                 }
 
                 break;
@@ -433,18 +440,19 @@ std::map<SequinID, GDecoyResults::VariantData> GDecoyResults::buildAF(const Deco
                 // AF for insertion
                 auto I = [&](const MData &d1, const IDData &d2)
                 {
-                    // Number of insertions is simply the number reported in CIGAR
+                    // Number of insertions is simply the number reported in CIGAR (IGV has the information)
                     const auto V = f2(d2, v.l.start);
 
                     /*
-                       * Inserted sequences are not in the reference, but we can infer the
-                       * number of references by subtracing all reads by inserted reads. Note
-                       * each inserted read is also a contribution to the total reads.
-                       */
+                     * Inserted sequences are not in the reference, but we can infer the
+                     * number of references by subtracing all reads by inserted reads. Note
+                     * each inserted read is also a contribution to the total reads.
+                     */
                     
                     const auto R1 = f1(d1, v.l.start);
                     const auto R2 = R1 - V;
                     
+                    assert(R2 >= 0);
                     return std::pair<Coverage, Coverage>(f1(d1, v.l.start) - V, V);
                 };
 
@@ -470,8 +478,12 @@ std::map<SequinID, GDecoyResults::VariantData> GDecoyResults::buildAF(const Deco
                                                                        x.sd.at("All").dls) :
                                                                      I(x.sd.at("All").match,
                                                                        x.sd.at("All").ins);
+                    
                     mm[v.name].R = b.first;
                     mm[v.name].V = b.second;
+                    
+                    assert(mm[v.name].R >= 0);
+                    assert(mm[v.name].V >= 0);
                 }
 
                 break;
