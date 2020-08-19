@@ -32,7 +32,7 @@ namespace Anaquin
     Scripts cancer();
     
     Scripts CSS();
-    Scripts PReport();
+    Scripts hg382chrQ();
     Scripts NormHTML();
     Scripts GermHTML();
     Scripts SomaHTML();

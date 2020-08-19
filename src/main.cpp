@@ -343,6 +343,7 @@ static Scripts manual(Tool tool)
     }
 }
 
+std::string __HACK_PRINT_CON__ = "";
 bool __HACK_IS_CANCER__ = false;
 
 inline std::string option(const Option &key, const Scripts &x = "")
@@ -420,6 +421,11 @@ template <typename Analyzer, typename O, typename F> void start(const std::strin
     o.info("Path: " + path);
     o.info("Resources: " + _p.opts[OPT_RESOURCE]);
 
+    if (!__HACK_PRINT_CON__.empty())
+    {
+        o.info("Conversion from hg38 to chrQ completed for " + __HACK_PRINT_CON__);
+    }
+    
     using namespace std::chrono;
     
     auto begin = high_resolution_clock::now();
@@ -840,8 +846,22 @@ void parse(int argc, char ** argv)
                         r.r3 = readR(hr, o); // Trimmed
                         r.r4 = readR(dr, o); // Trimmed
                     }
-                    else
+                    else // Restricted regions provided
                     {
+                        // Decoy mode? If so, maybe we should try to convert to chrQ?
+                        if (_p.opts.count(OPT_COMBINE))
+                        {
+                            const auto tmp = tmpFile();
+                            runScript(hg382chrQ(), hr + " " + dr + " " + rr + " > " + tmp);
+                            
+                            __HACK_PRINT_CON__ = rr;
+
+                            // Use the chrQ version instead of hg38
+                            rr = tmp;
+
+                            __HACK_PRINT_CON__ += (" to " + rr);
+                        }
+                        
                         RegionOptions o;
                         r.r1 = readR(hr, o); // No trimming
                         r.r2 = readR(dr, o); // No trimming

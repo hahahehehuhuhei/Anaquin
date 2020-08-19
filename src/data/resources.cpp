@@ -13,7 +13,7 @@
 #include "resources/broad_bam.txt"
 #include "resources/broad_vcf.txt"
 
-#include "resources/report.py"
+#include "resources/hg382chrQ.py"
 #include "resources/plotGene.R"
 #include "resources/plotNorm.R"
 #include "resources/plotAllele.R"
@@ -38,10 +38,9 @@ static std::string clean(const std::string &x)
 typedef std::string Scripts;
 #define ToString(x) clean(std::string(reinterpret_cast<char*>(x)))
 
-Scripts Anaquin::PReport()       { return ToString(scripts_report_py);               }
-
 Scripts Manual() { return ToString(data_manuals_anaquin_txt); }
 
+Scripts Anaquin::hg382chrQ()        { return ToString(scripts_hg382chrQ_py);   }
 Scripts Anaquin::PlotGene()         { return ToString(src_r_plotGene_R);       }
 Scripts Anaquin::PlotNorm()         { return ToString(src_r_plotNorm_R);       }
 Scripts Anaquin::PlotLinear()       { return ToString(src_r_plotLinear_R);     }

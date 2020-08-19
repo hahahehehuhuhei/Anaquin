@@ -36,6 +36,10 @@ else:
             x1 = int(toks[1])
             x2 = int(toks[2])
             found = False
+            
+            if "chrQ" in x0:
+                print(line)
+                continue
 
             # It's slow but it's alright...
             for i in keys:
@@ -63,3 +67,4 @@ else:
         
             if not found:
                 raise Exception("Failed to find intersection for: [" + line.replace("\t", " ").strip() + "]")
+#<<@@@@>>
