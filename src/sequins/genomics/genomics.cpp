@@ -612,6 +612,9 @@ GDecoyOptions GDecoyOptions::create(const FileName &writeS,
 
 GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, const GDecoyOptions &_o_, G1 g1, G2 g2)
 {
+    assert(!_o_.r1.inters().empty());
+    assert(!_o_.r2.inters().empty());
+    
     assert(!_o_.writeL1.empty() && !_o_.inputL2.empty());
     
     // Either decoy calibration or sample/sequin calibration or nothing

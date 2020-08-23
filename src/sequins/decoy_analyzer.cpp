@@ -72,6 +72,8 @@ static AnalyzeBAMResults analyzeBAM(const FileName &f1,
     assert(!chrs.empty());
     const auto isChrQ = f2.empty();
 
+    assert(!decoy.r2.empty());
+    
     o.analyze(f1);
     if (!f2.empty()) { o.analyze(f2); }
     std::shared_ptr<BAMWriter> wS, wD, wT, wM;
@@ -390,6 +392,9 @@ Results DecoyAnalyzer::analyze(const FileName &f1, const FileName &f2, const Opt
     assert(exists(o.index));
     assert(!o.errors.empty());
     assert(!o.seqs.empty());
+    
+    assert(!o.r1.inters().empty());
+    assert(!o.r2.inters().empty());
 
     Results r;
 

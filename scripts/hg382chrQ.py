@@ -65,7 +65,7 @@ else:
                     toks[3] = toks[3] + "_" + str(n)
                     n += 1
                     
-                    print(' '.join(toks))
+                    print('\t'.join(toks))
                     found = True
                     break
         

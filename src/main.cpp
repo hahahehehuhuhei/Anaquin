@@ -871,6 +871,11 @@ void parse(int argc, char ** argv)
                         r.r4 = readR(BedTools::intersect(dr, rr, edge), o); // Trimmed
                     }
                     
+                    assert(!r.r1->inters().empty());
+                    assert(!r.r2->inters().empty());
+                    assert(!r.r3->inters().empty());
+                    assert(!r.r4->inters().empty());
+
                     initAR(r);
                     r.t1 = readTrans(Reader(GInfoCode(_p.opts.at(OPT_RESOURCE)).path));
                     

@@ -556,6 +556,9 @@ void GBroadBam::report(const FileName &f1, const FileName &f2, const Options &o1
     o2.index = o1.index;
     o2.writer = std::shared_ptr<Writer<>>(new FileWriter(o2.work));
 
+    assert(!o2.r1.empty());
+    assert(!o2.r2.empty());
+
     if (f2.empty())
     {
         o2.errors.insert(GDecoyChrQS);
