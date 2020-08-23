@@ -26,6 +26,7 @@ else:
 
     assert(len(hg38) > 0)
     assert(len(chrQ) > 0)
+    n = 0
 
     with open(file) as r:
         keys = list(reversed(sorted(hg38.keys())))    
@@ -61,6 +62,9 @@ else:
                     toks[0] = chrQ[name]["chr"]
                     toks[1] = str(d1)
                     toks[2] = str(d2)
+                    toks[3] = toks[3] + "_" + str(n)
+                    n += 1
+                    
                     print(' '.join(toks))
                     found = True
                     break
