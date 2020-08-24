@@ -240,19 +240,7 @@ namespace Anaquin
             
                 _tree = std::shared_ptr<IntervalTree<T *>>(new IntervalTree<T *> { loci });
             }
-        /*
-            inline T * find(const typename T::IntervalID &x, bool exact = true)
-            {
-                if (exact)
-                {
-                    return _inters.count(x) ? &(_inters.at(x)) : nullptr;
-                }
-                else
-                {
-                    return _inters.find(x) ? _inters.find(x) : nullptr;
-                }
-            }
-        */
+
             inline const T * find(const typename T::IntervalID &x, bool exact = true) const
             {
                 if (exact)
@@ -363,17 +351,6 @@ namespace Anaquin
     
     struct Chr2DInters : public std::map<ChrID, DIntervals<>>
     {
-        /*
-        DInter * find(const SequinID &x, bool exact = true)
-        {
-            for (auto &i : *this)
-            {
-                if (i.second.find(x, exact)) { return i.second.find(x); }
-            }
-            
-            return nullptr;
-        }
-        */
         const DInter * find(const SequinID &x, bool exact = true) const
         {
             for (auto &i : *this)
@@ -382,6 +359,19 @@ namespace Anaquin
             }
             
             return nullptr;
+        }
+        
+        std::vector<DInter *> contains(const Locus &l) const
+        {
+            std::vector<DInter *> x;
+            
+            for (auto &i : *this)
+            {
+                // Merge everything that falls into the interval
+                i.second.contains(l, &x);
+            }
+
+            return x;
         }
 
         DInter::Stats stats() const

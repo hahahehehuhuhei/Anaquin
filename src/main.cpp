@@ -345,6 +345,7 @@ static Scripts manual(Tool tool)
 
 std::string __HACK_PRINT_CON__ = "";
 bool __HACK_IS_CANCER__ = false;
+bool __HACK_IS_CAPTURE__ = false;
 
 inline std::string option(const Option &key, const Scripts &x = "")
 {
@@ -858,7 +859,8 @@ void parse(int argc, char ** argv)
 
                             // Use the chrQ version instead of hg38
                             rr = tmp;
-
+                            
+                            __HACK_IS_CAPTURE__ = true;
                             __HACK_PRINT_CON__ += (" to " + rr);
                         }
                         

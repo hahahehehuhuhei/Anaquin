@@ -21,6 +21,68 @@ typedef ParserBAMBED::Response Response;
 typedef LadderCalibrator::Method Method;
 typedef LadderCalibrator::Options::PoolData PoolData;
 
+/*
+ * Capture regions may break a sequin region into non-overlapping smaller regions. This function merges them and return
+ * a data structure that resembles as if a single region.
+ */
+
+static std::shared_ptr<DInter::Stats> mergeStats(const Chr2DInters &r, const std::string &x, const WriterOptions &o)
+{
+    extern bool __HACK_IS_CAPTURE__;
+    auto stats = std::shared_ptr<DInter::Stats>(new DInter::Stats());
+    
+    // Only if capture and original sequin name failed to match
+    if (__HACK_IS_CAPTURE__ && !r.find(x))
+    {
+        std::vector<Coverage> p25, p50, p75, mean, n;
+
+        for (auto i = 1;; i++) // Start from "1"
+        {
+            const auto name = x + "_" + std::to_string(i); // Capture
+            const DInter *m = nullptr;
+            
+            if ((m = r.find(name)))
+            {
+                const auto tmp = m->stats();
+                p25.push_back(tmp.p25);
+                p50.push_back(tmp.p50);
+                p75.push_back(tmp.p75);
+                n.push_back(tmp.n);
+                mean.push_back(tmp.mean);
+                continue;
+            }
+            
+            break;
+        }
+        
+        if (p25.empty())
+        {
+            return nullptr;
+        }
+        
+        stats->n    = SS::sum(n);
+        stats->p25  = SS::mean(p25);
+        stats->p50  = SS::mean(p50);
+        stats->p75  = SS::mean(p75);
+        stats->mean = SS::mean(mean);
+        
+        // Only a few selected fields should be sufficient for coverage calculation
+        return stats;
+    }
+    else
+    {
+        if (r.find(x))
+        {
+            *stats = r.find(x)->stats();
+            return stats;
+        }
+        else
+        {
+            return nullptr;
+        }
+    }
+}
+
 void GDecoyResults::writeR(const GDecoyResults &r, const GDecoyOptions &o)
 {
     if (o.tsvR.empty())
@@ -73,7 +135,8 @@ void GDecoyResults::writeR(const GDecoyResults &r, const GDecoyOptions &o)
             const auto afterN = r.after.r1.find(name) ? S0(r.after.r1.find(name)->stats().n) : MISSING;
             const auto afterM = r.after.r2.find(name) ? S4(r.after.r2.find(name)->stats().mean) : MISSING;
             
-            const auto before = r.before.r2.find(name);
+            // Sequin coverage before calibration (merging because it could be intersecting capture regions)
+            const auto beforeS = mergeStats(r.before.r2, name, o);
             
             o.writer->write((boost::format(f) % name
                                               % i.first
@@ -85,7 +148,7 @@ void GDecoyResults::writeR(const GDecoyResults &r, const GDecoyOptions &o)
                                               % r.before.r1.find(name)->stats().n
                                               % afterN
                                               % (samp ? S4(r.samp.r2.find(name)->stats().mean) : MISSING)
-                                              % (before ? S4(r.before.r2.find(name)->stats().mean) : MISSING)
+                                              % (beforeS ? S4(beforeS->mean) : MISSING)
                                               % afterM
                                               % norm).str());
         }
@@ -812,8 +875,11 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
                     const auto m1 = o.meth != CalibrateMethod::Custom ? o.meth : CalibrateMethod::Mean;
                     const auto m2 = o.meth != CalibrateMethod::Custom ? o.meth : CalibrateMethod::Mean;
 
+                    // Sequin coverage before calibration (merging because it could be intersecting capture regions)
+                    const auto beforeS = mergeStats(r.before.r2, name, o);
+
                     // Sequin coverage
-                    const auto seqC = before ? getLocalCoverage(r.before.r2.find(name)->stats(), m1) : NAN;
+                    const auto seqC = beforeS ? getLocalCoverage(*beforeS, m1) : NAN;
 
                     // Sequin median (only used in custom)
                     const auto samM = samp.p50;

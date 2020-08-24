@@ -166,7 +166,10 @@ FileName BedTools::intersect(const FileName &x, const FileName &y, Base edge)
     {
         const auto m12 = inter<ParserBed::Data, Locus>(m1[c], m2[c]);
         
-        for (auto i = 0u; i < m12.size(); i++)
+        auto j = 0;
+        std::string lastName = "";
+        
+        for (auto i = 0; i < m12.size(); i++)
         {
             // Sequin region? (e.g. GS_010)
             const auto r = std::find_if(m1[c].begin(), m1[c].end(), [&](const ParserBed::Data &x)
@@ -174,10 +177,16 @@ FileName BedTools::intersect(const FileName &x, const FileName &y, Base edge)
                 return x.l.overlap(m12[i]);
             });
             
-            // Contig name
-            const auto cont = m12.size() > 1 ? "_" + std::to_string(i+1) : "";
+            if (r->name != lastName)
+            {
+                j = 0;
+            }
             
-            out << c << "\t" << m12[i].start-1 << "\t" << m12[i].end << "\t" << r->name << cont << "\n";
+            // Contig name (e.g. "CM_137_1" and "CM_137_2" etc)
+            const auto cont = m12.size() > 1 ? "_" + std::to_string(j+1) : "";
+            
+            j++;
+            out << c << "\t" << m12[i].start-1 << "\t" << m12[i].end << "\t" << (lastName = r->name) << cont << "\n";
         }
     }
     

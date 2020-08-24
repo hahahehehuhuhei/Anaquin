@@ -56,15 +56,7 @@ GCalibrate::Stats GCalibrate::analyze(const FileName &f1, const FileName &f2, co
     }
     
     const std::string prefix = o.isCancer ? "cancer" : "calibrate";
-    
-    if (o.isCancer)
-    {
-        m1("broad_bam.txt", prefix + "_report.txt");
-    }
-    else
-    {
-        m1("broad_bam.txt", prefix + "_report.txt");
-    }
+    m1("broad_bam.txt", prefix + "_report.txt");
 
     if (o.debug)
     {
