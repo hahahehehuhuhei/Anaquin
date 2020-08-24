@@ -133,10 +133,12 @@ void GDecoyResults::writeR(const GDecoyResults &r, const GDecoyOptions &o)
             const auto norm = o.seqC == NO_CALIBRATION ? getNAFromD(r.c1.norms, name, 4) : MISSING;
             
             const auto afterN = r.after.r1.find(name) ? S0(r.after.r1.find(name)->stats().n) : MISSING;
-            const auto afterM = r.after.r2.find(name) ? S4(r.after.r2.find(name)->stats().mean) : MISSING;
             
             // Sequin coverage before calibration (merging because it could be intersecting capture regions)
             const auto beforeS = mergeStats(r.before.r2, name, o);
+
+            // Sequin coverage after calibration (merging because it could be intersecting capture regions)
+            const auto afterS = mergeStats(r.after.r2, name, o);
             
             o.writer->write((boost::format(f) % name
                                               % i.first
@@ -149,7 +151,7 @@ void GDecoyResults::writeR(const GDecoyResults &r, const GDecoyOptions &o)
                                               % afterN
                                               % (samp ? S4(r.samp.r2.find(name)->stats().mean) : MISSING)
                                               % (beforeS ? S4(beforeS->mean) : MISSING)
-                                              % afterM
+                                              % (afterS  ? S4(afterS->mean)  : MISSING)
                                               % norm).str());
         }
     }
