@@ -361,19 +361,6 @@ namespace Anaquin
             return nullptr;
         }
         
-        std::vector<DInter *> contains(const Locus &l) const
-        {
-            std::vector<DInter *> x;
-            
-            for (auto &i : *this)
-            {
-                // Merge everything that falls into the interval
-                i.second.contains(l, &x);
-            }
-
-            return x;
-        }
-
         DInter::Stats stats() const
         {
             DInter::Stats stats;
