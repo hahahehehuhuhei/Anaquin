@@ -36,7 +36,7 @@ static std::shared_ptr<DInter::Stats> mergeStats(const Chr2DInters &r, const std
     {
         std::vector<Coverage> p25, p50, p75, mean, n;
 
-        for (auto i = 1;; i++) // Start from "1"
+        for (auto i = 0;; i++) // Start from "0"
         {
             const auto name = x + "_" + std::to_string(i); // Capture
             const DInter *m = nullptr;

@@ -27,6 +27,7 @@ else:
     assert(len(hg38) > 0)
     assert(len(chrQ) > 0)
     n = 0
+    last = None
 
     with open(file) as r:
         keys = list(reversed(sorted(hg38.keys())))    
@@ -59,6 +60,9 @@ else:
                     d2 = chrQ[name]["end"] - d2                
                     if d1 > d2:
                         raise Exception("Conversion failed. Please contact us for further details")
+                    if last != toks[3]:
+                        n = 0 # Reset it back
+                    last = toks[3]
                     toks[0] = chrQ[name]["chr"]
                     toks[1] = str(d1)
                     toks[2] = str(d2)
