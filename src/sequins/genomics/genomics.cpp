@@ -36,7 +36,7 @@ static std::shared_ptr<DInter::Stats> mergeStats(const Chr2DInters &r, const std
     {
         std::vector<Coverage> p25, p50, p75, mean, n;
 
-        for (auto i = 0;; i++) // Start from "0"
+        for (auto i = 1;; i++) // Start from "1"
         {
             const auto name = x + "_" + std::to_string(i); // Capture
             const DInter *m = nullptr;
@@ -76,10 +76,8 @@ static std::shared_ptr<DInter::Stats> mergeStats(const Chr2DInters &r, const std
             *stats = r.find(x)->stats();
             return stats;
         }
-        else
-        {
-            return nullptr;
-        }
+        
+        return nullptr;
     }
 }
 
@@ -129,10 +127,12 @@ void GDecoyResults::writeR(const GDecoyResults &r, const GDecoyOptions &o)
         for (auto &j : i.second.data())
         {
             const auto &name = j.second.id();
-            const auto samp = r.samp.r1.find(name);
             const auto norm = o.seqC == NO_CALIBRATION ? getNAFromD(r.c1.norms, name, 4) : MISSING;
             
             const auto afterN = r.after.r1.find(name) ? S0(r.after.r1.find(name)->stats().n) : MISSING;
+            
+            // Sample coverage before and after calibration (r2 to make it consistent)
+            const auto sampS = mergeStats(r.samp.r2, name, o);
             
             // Sequin coverage before calibration (merging because it could be intersecting capture regions)
             const auto beforeS = mergeStats(r.before.r2, name, o);
@@ -146,10 +146,10 @@ void GDecoyResults::writeR(const GDecoyResults &r, const GDecoyOptions &o)
                                               % j.second.l().end
                                               % o.edge
                                               % r.lib.meanRL()
-                                              % (samp ? S0(r.samp.r1.find(name)->stats().n) : MISSING)
+                                              % (sampS ? S0(sampS->n) : MISSING)
                                               % r.before.r1.find(name)->stats().n
                                               % afterN
-                                              % (samp ? S4(r.samp.r2.find(name)->stats().mean) : MISSING)
+                                              % (sampS ? S4(sampS->mean) : MISSING)
                                               % (beforeS ? S4(beforeS->mean) : MISSING)
                                               % (afterS  ? S4(afterS->mean)  : MISSING)
                                               % norm).str());
@@ -886,8 +886,11 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
                     // Sequin median (only used in custom)
                     const auto samM = samp.p50;
                     
+                    // Sample coverage (merging because it could be intersecting capture regions)
+                    const auto sampS = mergeStats(r.samp.r2, name, o);
+                                        
                     // Provisional local sample coverage
-                    const auto samC1 = getLocalCoverage(r.samp.r2.find(name)->stats(), m2);
+                    const auto samC1 = sampS ? getLocalCoverage(*sampS, m2) : NAN;
 
                     // Final sample coverage
                     auto samC2 = samC1;

@@ -10,6 +10,7 @@
 
 #include "sequins/rna/rna.hpp"
 #include "sequins/meta/meta.hpp"
+#include "parsers/parser_csv.hpp"
 #include "sequins/rna/r_split.hpp"
 #include "sequins/meta/m_split.hpp"
 #include "sequins/genomics/g_tmm.hpp"
@@ -849,16 +850,38 @@ void parse(int argc, char ** argv)
                     }
                     else // Restricted regions provided
                     {
+                        auto oldRR  = rr;
+                        auto isHG38 = false;
+                        
                         // Decoy mode? If so, maybe we should try to convert to chrQ?
                         if (_p.opts.count(OPT_COMBINE))
                         {
                             const auto tmp = tmpFile();
                             runScript(hg382chrQ(), hr + " " + dr + " " + rr + " > " + tmp);
                             
-                            __HACK_PRINT_CON__ = rr;
-
-                            // Use the chrQ version instead of hg38
-                            rr = tmp;
+                            auto nChrQ = 0;
+                            auto nHG38 = 0;
+                            
+                            ParserCSV::parse(Reader(rr), [&](const ParserCSV::Data &x, Progress i)
+                            {
+                                if (isSubstr(x[0], "chrQ"))
+                                {
+                                    nChrQ++;
+                                }
+                                else
+                                {
+                                    nHG38++;
+                                }
+                            }, "\t");
+                            
+                            // Is this really a hg38 lift-over file?
+                            if (nHG38 > nChrQ)
+                            {
+                                isHG38 = true;
+                            }
+                            
+                            // Use the chrQ version instead of hg38 (for lift-over)
+                            __HACK_PRINT_CON__ = rr = tmp;
                             
                             __HACK_IS_CAPTURE__ = true;
                             __HACK_PRINT_CON__ += (" to " + rr);
@@ -869,7 +892,16 @@ void parse(int argc, char ** argv)
                         r.r2 = readR(dr, o); // No trimming
                         
                         o.edge = edge;
-                        r.r3 = readR(hr, o); // Trimmed
+                        
+                        if (isHG38)
+                        {
+                            r.r3 = readR(BedTools::intersect(hr, oldRR, edge), o); // Trimmed
+                        }
+                        else
+                        {
+                            r.r3 = readR(hr, o); // Trimmed
+                        }
+                        
                         r.r4 = readR(BedTools::intersect(dr, rr, edge), o); // Trimmed
                     }
                     

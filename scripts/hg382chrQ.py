@@ -30,7 +30,7 @@ else:
     last = None
 
     with open(file) as r:
-        keys = list(reversed(sorted(hg38.keys())))    
+        keys = list(reversed(sorted(hg38.keys())))
         for line in r:
             toks = line.strip().split("\t")
         
