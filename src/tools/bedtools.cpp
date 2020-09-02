@@ -128,7 +128,7 @@ FileName BedTools::intersect2(const FileName &x, const FileName &y)
 FileName BedTools::intersect(const FileName &x, const FileName &y, Base edge)
 {
     std::set<ChrID> cIDs;
-    std::map<ChrID, std::vector<ParserBed::Data>> m1;
+    std::map<ChrID, std::vector<ParserBed::Data>> m1; // Source and trimmed
     std::map<ChrID, std::vector<ParserBed::Data>> m2;
     
     /*
