@@ -153,9 +153,13 @@ namespace Anaquin
             
             x.l.end   -= edge;
             x.l.start += edge;
-            assert(x.l.end >= x.l.start);
-
-            c2d[x.cID].l2d[x.l] = x;            
+            
+            if (x.l.end < x.l.start)
+            {
+                throw std::runtime_error("Region: " + x.name + " has an error. The end position is equal or before the start position. The start position is: " + std::to_string(x.l.start) + " and the end position is: " + std::to_string(x.l.end));
+            }
+            
+            c2d[x.cID].l2d[x.l] = x;
             f(x, i);
         });
 
