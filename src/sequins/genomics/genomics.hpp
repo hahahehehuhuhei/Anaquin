@@ -10,6 +10,7 @@
 namespace Anaquin
 {
     const auto GDecoyChrQS = "chrQS";
+    const auto GDecoyChrQR = "chrQR";
     const auto GDecoyChrQL = "chrQL";
     
     struct GResource : public Resource

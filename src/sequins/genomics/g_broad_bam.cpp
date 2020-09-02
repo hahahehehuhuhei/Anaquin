@@ -338,6 +338,8 @@ GBroadBam::CoverageReport GBroadBam::reportC(const FileName &file, bool isChrQ)
 
     RGrep(file, tmp1, "NAME", "All");
     RGrep(file, tmp2, "NAME", "All", false);
+    
+    // Making it "chrQ" will also read in "chrQL". Let's assume "chrQR" is not causing problems here...
     if (isChrQ) { RGrep(tmp2, tmp3, "CHROM", "chrQS"); } else { tmp3 = tmp2; }
     
     const auto x4 = numeric<Coverage>(RReadTSV(tmp3, "SAMPLE_COVERAGE"));

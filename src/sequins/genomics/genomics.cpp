@@ -767,6 +767,8 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
     o_.d1 = std::shared_ptr<SampleCNV2Data>(new SampleCNV2Data());
     o_.r1 = o.r1;
     o_.d1->tsvL = o.work + "/" + o.tsvL1NotMerged; // Unmerged for calibration
+    
+    // Making it "chrQ" will also read in "chrQL". Let's assume "chrQR" is not causing problems here...
     o_.d1->sampC = meanSamp(o.work + "/" + o.tsvR, f2.empty() ? "chrQS" : "chr");
 
     o_.logger = o.logger;
@@ -864,7 +866,7 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
                         
             for (auto &i : inters)
             {
-                if (isChrQ && i.first != GDecoyChrQS)
+                if (isChrQ && i.first != GDecoyChrQS && i.first != GDecoyChrQR)
                 {
                     continue;
                 }
