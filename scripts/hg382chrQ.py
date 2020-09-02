@@ -50,16 +50,19 @@ else:
                     name = hg38[i]["name"].replace("_R", "").replace("_A", "") # Sequin name
                     if not name in chrQ:
                         raise Exception(name + " is in hg38 BED file, but not in chrQ BED file")
-                    d1 = x1 - hg38[i]["start"] # Delta of the starting position
-                    d2 = hg38[i]["end"] - x2   # Delta of the ending position
-                
-                    assert(d1 >= 0)
-                    assert(d2 >= 0)
 
-                    d1 = chrQ[name]["start"] + d1
-                    d2 = chrQ[name]["end"] - d2                
+                    d1_38 = x1 - hg38[i]["start"] # Delta of the starting position on hg38
+                    d2_38 = hg38[i]["end"] - x2   # Delta of the ending position on hg38
+                
+                    assert(d1_38 >= 0)
+                    assert(d2_38 >= 0)
+
+                    d1 = chrQ[name]["start"] + d2_38
+                    d2 = chrQ[name]["end"] - d1_38
+
                     if d1 > d2:
                         raise Exception("Conversion failed. Please contact us for further details")
+                    
                     if last != toks[3]:
                         n = 0 # Reset it back
                     last = toks[3]
