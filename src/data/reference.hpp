@@ -28,6 +28,7 @@ namespace Anaquin
         Meta,
         TMM,
         Split,
+        Cancer,
         Calibrate,
         Germline,
         Somatic,

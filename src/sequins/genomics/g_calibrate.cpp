@@ -10,7 +10,7 @@ GCalibrate::Stats GCalibrate::analyze(const FileName &f1, const FileName &f2, co
     o_.meth  = o.meth;
     o_.origW = o.work;
     o_.customSequinThreshold = o.customSequinThreshold;
-
+    
     if (o.debug)
     {
         switch (o_.meth)
@@ -23,6 +23,8 @@ GCalibrate::Stats GCalibrate::analyze(const FileName &f1, const FileName &f2, co
         }
     }
     
+    const auto isCancer = o.isCancer;
+
     // Generate outputs like BroadBAM (we're going to move files later)
     GBroadBam::report(f1, f2, o_);
     
@@ -53,47 +55,27 @@ GCalibrate::Stats GCalibrate::analyze(const FileName &f1, const FileName &f2, co
         m1("merged.bam", "merged.bam");
     }
     
-    m1("broad_bam.txt", "calibrate_report.txt");
+    const std::string prefix = o.isCancer ? "cancer" : "calibrate";
+    m1("broad_bam.txt", prefix + "_report.txt");
 
     if (o.debug)
     {
-        m1("broadBAM_regions.tsv",   "calibrate_regions.tsv");
-        m1("broadBAM_variants.tsv",  "calibrate_variants.tsv");
-        m1("broadBAM_synthetic.tsv", "calibrate_synthetic.tsv");
-        m1("broadBAM_errors.tsv",    "calibrate_errors.tsv");
-        m1("broadBAM_features.tsv",  "calibrate_features.tsv");
+        m1("broadBAM_regions.tsv",   prefix + "_regions.tsv");
+        m1("broadBAM_variants.tsv",  prefix + "_variants.tsv");
+        m1("broadBAM_synthetic.tsv", prefix + "_synthetic.tsv");
+        m1("broadBAM_errors.tsv",    prefix + "_errors.tsv");
+        m1("broadBAM_features.tsv",  prefix + "_features.tsv");
     }
 
     return GCalibrate::Stats();
 }
 
-static void writeReport(const SOptions &o)
-{
-    auto writeSomatic = [&](const FileName &file, const FileName &src)
-    {
-        o.generate(file);
-        o.writer->open(file);
-        o.writer->write((boost::format(PlotSomatic()) % date()
-                                                      % src
-                                                      % o.work
-                                                      % src
-                                                      % "Allele Frequency Ladder"
-                                                      % "Expected Allele Frequency (log2)"
-                                                      % "Measured Allele Frequency (log2)"
-                                                      % "data$EXP_FREQ"
-                                                      % "data$OBS_FREQ_CALIB").str());
-        o.writer->close();
-    };
-}
-
 void GCalibrate::report(const FileName &file, const Options &o)
 {
     analyze(file, "", o);
-    writeReport(o);
 }
 
 void GCalibrate::report(const FileName &f1, const FileName &f2, const Options &o)
 {
     analyze(f1, f2, o);
-    writeReport(o);
 }

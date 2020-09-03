@@ -26,9 +26,11 @@ else:
 
     assert(len(hg38) > 0)
     assert(len(chrQ) > 0)
+    n = 0
+    last = None
 
     with open(file) as r:
-        keys = list(reversed(sorted(hg38.keys())))    
+        keys = list(reversed(sorted(hg38.keys())))
         for line in r:
             toks = line.strip().split("\t")
         
@@ -36,6 +38,10 @@ else:
             x1 = int(toks[1])
             x2 = int(toks[2])
             found = False
+            
+            if "chrQ" in x0:
+                print(line)
+                continue
 
             # It's slow but it's alright...
             for i in keys:
@@ -44,22 +50,32 @@ else:
                     name = hg38[i]["name"].replace("_R", "").replace("_A", "") # Sequin name
                     if not name in chrQ:
                         raise Exception(name + " is in hg38 BED file, but not in chrQ BED file")
-                    d1 = x1 - hg38[i]["start"] # Delta of the starting position
-                    d2 = hg38[i]["end"] - x2   # Delta of the ending position
-                
-                    assert(d1 >= 0)
-                    assert(d2 >= 0)
 
-                    d1 = chrQ[name]["start"] + d1
-                    d2 = chrQ[name]["end"] - d2                
+                    d1_38 = x1 - hg38[i]["start"] # Delta of the starting position on hg38
+                    d2_38 = hg38[i]["end"] - x2   # Delta of the ending position on hg38
+                
+                    assert(d1_38 >= 0)
+                    assert(d2_38 >= 0)
+
+                    d1 = chrQ[name]["start"] + d2_38
+                    d2 = chrQ[name]["end"] - d1_38
+
                     if d1 > d2:
                         raise Exception("Conversion failed. Please contact us for further details")
+                    
+                    if last != toks[3]:
+                        n = 0 # Reset it back
+                    last = toks[3]
                     toks[0] = chrQ[name]["chr"]
                     toks[1] = str(d1)
                     toks[2] = str(d2)
-                    print(' '.join(toks))
+                    toks[3] = toks[3] + "_" + str(n)
+                    n += 1
+                    
+                    print('\t'.join(toks))
                     found = True
                     break
         
             if not found:
                 raise Exception("Failed to find intersection for: [" + line.replace("\t", " ").strip() + "]")
+#<<@@@@>>

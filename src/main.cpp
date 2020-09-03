@@ -10,6 +10,7 @@
 
 #include "sequins/rna/rna.hpp"
 #include "sequins/meta/meta.hpp"
+#include "parsers/parser_csv.hpp"
 #include "sequins/rna/r_split.hpp"
 #include "sequins/meta/m_split.hpp"
 #include "sequins/genomics/g_tmm.hpp"
@@ -49,7 +50,7 @@ typedef std::string Value;
 
 static Build __ha__;
 
-static std::string version() { return "3.20.0"; }
+static std::string version() { return "3.22.0"; }
 
 /*
  * Options specified in the command line
@@ -127,6 +128,7 @@ static std::map<Value, Tool> _tools =
     { "split",     Tool::Split     },
     { "germline",  Tool::Germline  },
     { "somatic",   Tool::Somatic   },
+    { "cancer",    Tool::Cancer    },
     { "calibrate", Tool::Calibrate },
     { "broad_bam", Tool::BroadBAM  },
     { "broad_vcf", Tool::BroadVCF  }
@@ -332,14 +334,19 @@ static Scripts manual(Tool tool)
         case Tool::Meta:      { return meta();      }
         case Tool::Norm:      { return norm();      }
         case Tool::Split:     { return split();     }
+        case Tool::Cancer:    { return cancer();    }
         case Tool::Somatic:   { return somatic();   }
         case Tool::Germline:  { return germline();  }
         case Tool::Calibrate: { return calibrate(); }
         case Tool::BroadBAM:  { return broadBAM();  }
         case Tool::BroadVCF:  { return broadVCF();  }
-        default:              { return "";          }
+        default:              { return cancer();    }
     }
 }
+
+std::string __HACK_PRINT_CON__ = "";
+bool __HACK_IS_CANCER__ = false;
+bool __HACK_IS_CAPTURE__ = false;
 
 inline std::string option(const Option &key, const Scripts &x = "")
 {
@@ -416,6 +423,11 @@ template <typename Analyzer, typename O, typename F> void start(const std::strin
     o.info("Path: " + path);
     o.info("Resources: " + _p.opts[OPT_RESOURCE]);
 
+    if (!__HACK_PRINT_CON__.empty())
+    {
+        o.info("Conversion from hg38 to chrQ completed for " + __HACK_PRINT_CON__);
+    }
+    
     using namespace std::chrono;
     
     auto begin = high_resolution_clock::now();
@@ -669,6 +681,7 @@ void parse(int argc, char ** argv)
             {
                 switch (_p.tool)
                 {
+                    case Tool::Cancer:
                     case Tool::Somatic:
                     case Tool::Germline:
                     case Tool::Calibrate: { _p.opts[opt] = val; break; }
@@ -760,15 +773,19 @@ void parse(int argc, char ** argv)
     __outputW__ = std::shared_ptr<TerminalWriter>(new TerminalWriter());
     __loggerW__->open("anaquin.log");
     
-    #define GSFA()         (GSeqFA(_p.opts.at(OPT_RESOURCE)).path)
-    #define GDFA()         (GSeqDecoy(_p.opts.at(OPT_RESOURCE)).path)
-    #define GFeatBED_(x)   (GFeatBED(_p.opts.at(OPT_RESOURCE), x).path)
-    #define GLTSV(x)       (GSynTSV(_p.opts.at(OPT_RESOURCE)).path)
-    #define GAttrBED_(x)   (GAttrBED(_p.opts.at(OPT_RESOURCE)).path)
-    #define GRegionBED_(x) (GRegionBED(_p.opts.at(OPT_RESOURCE), x).path)
-    #define GVCF(x)        (GVarVCF(_p.opts.at(OPT_RESOURCE), x).path)
-    #define RSFA()         (RNAFA(_p.opts.at(OPT_RESOURCE)).path)
-    #define RDFA()         (RNADecoy(_p.opts.at(OPT_RESOURCE)).path)
+    #define CSFA()          (CSeqFA(_p.opts.at(OPT_RESOURCE)).path)
+    #define GSFA()          (GSeqFA(_p.opts.at(OPT_RESOURCE)).path)
+    #define GDFA()          (GSeqDecoy(_p.opts.at(OPT_RESOURCE)).path)
+    #define CDFA()          (CSeqDecoy(_p.opts.at(OPT_RESOURCE)).path)
+    #define GFeatBED_(x)    (GFeatBED(_p.opts.at(OPT_RESOURCE), x).path)
+    #define GLTSV(x)        (GSynTSV(_p.opts.at(OPT_RESOURCE)).path)
+    #define GAttrBED_(x)    (GAttrBED(_p.opts.at(OPT_RESOURCE)).path)
+    #define CRegionBED_(x)  (CRegionBED(_p.opts.at(OPT_RESOURCE), x).path)
+    #define GRegionBED_(x)  (GRegionBED(_p.opts.at(OPT_RESOURCE), x).path)
+    #define CVCF(x)         (CVarVCF(_p.opts.at(OPT_RESOURCE), x).path)
+    #define GVCF(x)         (GVarVCF(_p.opts.at(OPT_RESOURCE), x).path)
+    #define RSFA()          (RNAFA(_p.opts.at(OPT_RESOURCE)).path)
+    #define RDFA()          (RNADecoy(_p.opts.at(OPT_RESOURCE)).path)
 
     auto initAR = [&](UserReference &r)
     {
@@ -790,6 +807,7 @@ void parse(int argc, char ** argv)
         case Tool::Meta:
         case Tool::Norm:
         case Tool::Split:
+        case Tool::Cancer:
         case Tool::Somatic:
         case Tool::Germline:
         case Tool::BroadBAM:
@@ -799,22 +817,27 @@ void parse(int argc, char ** argv)
             switch (_p.tool)
             {
                 case Tool::Split:
+                case Tool::Cancer:
                 case Tool::BroadBAM:
                 case Tool::Calibrate:
                 {
-                    const auto edge  = _p.opts.count(OPT_EDGE)   ? stoi(_p.opts[OPT_EDGE]) : DEFAULT_EDGE;
+                    const auto edge  = _p.opts.count(OPT_EDGE)  ? stoi(_p.opts[OPT_EDGE]) : DEFAULT_EDGE;
                     const auto build = _p.opts.count(OPT_BUILD) ? parseBuild(_p.opts.at(OPT_BUILD)) :  (_p.opts.count(OPT_COMBINE) ? Detector::fromBAM(_p.opts.at(OPT_COMBINE)) : Build::hg38);
                     
                     const auto bothHR = _p.opts.count(OPT_SAMPLE) && _p.opts.count(OPT_SEQUIN);
+                    const bool isCancer = __HACK_IS_CANCER__ = _p.tool == Tool::Cancer;
+
+                    const auto gb1 = isCancer ? CRegionBED_(build) : GRegionBED_(build);
+                    const auto gb2 = isCancer ? CRegionBED_(Build::chrQ) : GRegionBED_(Build::chrQ);
                     
-                    const auto hr = _p.opts.count(OPT_R_BED) ? _p.opts[OPT_R_BED] :
-                                    _p.opts.count(OPT_R_HUMAN) ? _p.opts[OPT_R_HUMAN] : GRegionBED_(build);
-                    const auto dr = _p.opts.count(OPT_R_BED) ? _p.opts[OPT_R_BED] :
-                                    _p.opts.count(OPT_R_DECOY) ? _p.opts[OPT_R_DECOY] : !bothHR ? GRegionBED_(Build::chrQ) : GRegionBED_(build);
-                    
+                    const auto hr = _p.opts.count(OPT_R_BED)   ? _p.opts[OPT_R_BED] :
+                                    _p.opts.count(OPT_R_HUMAN) ? _p.opts[OPT_R_HUMAN] : gb1;
+                    const auto dr = _p.opts.count(OPT_R_BED)   ? _p.opts[OPT_R_BED] :
+                                    _p.opts.count(OPT_R_DECOY) ? _p.opts[OPT_R_DECOY] : !bothHR ? gb2 : gb1;
+
                     // Restricted regions
-                    const auto rr = _p.opts.count(OPT_R_REGS)  ? _p.opts[OPT_R_REGS] : dr;
-                    
+                    auto rr = _p.opts.count(OPT_R_REGS) ? _p.opts[OPT_R_REGS] : dr;
+
                     if (dr == rr)
                     {
                         RegionOptions o;
@@ -825,31 +848,90 @@ void parse(int argc, char ** argv)
                         r.r3 = readR(hr, o); // Trimmed
                         r.r4 = readR(dr, o); // Trimmed
                     }
-                    else
+                    else // Restricted regions provided
                     {
+                        auto oldRR  = rr;
+                        auto isHG38 = false;
+                        
+                        // Decoy mode? If so, maybe we should try to convert to chrQ?
+                        if (_p.opts.count(OPT_COMBINE))
+                        {
+                            const auto tmp = tmpFile();
+                            runScript(hg382chrQ(), hr + " " + dr + " " + rr + " > " + tmp);
+                            
+                            auto nChrQ = 0;
+                            auto nHG38 = 0;
+                            
+                            ParserCSV::parse(Reader(rr), [&](const ParserCSV::Data &x, Progress i)
+                            {
+                                if (isSubstr(x[0], "chrQ"))
+                                {
+                                    nChrQ++;
+                                }
+                                else
+                                {
+                                    nHG38++;
+                                }
+                            }, "\t");
+                            
+                            // Is this really a hg38 lift-over file?
+                            if (nHG38 > nChrQ)
+                            {
+                                isHG38 = true;
+                            }
+                            
+                            // Use the chrQ version instead of hg38 (for lift-over)
+                            __HACK_PRINT_CON__ = rr = tmp;
+                            
+                            __HACK_IS_CAPTURE__ = true;
+                            __HACK_PRINT_CON__ += (" to " + rr);
+                        }
+                        
                         RegionOptions o;
                         r.r1 = readR(hr, o); // No trimming
                         r.r2 = readR(dr, o); // No trimming
                         
                         o.edge = edge;
-                        r.r3 = readR(hr, o); // Trimmed
+                        
+                        if (isHG38)
+                        {
+                            r.r3 = readR(BedTools::intersect(hr, oldRR, edge), o); // Trimmed
+                        }
+                        else
+                        {
+                            r.r3 = readR(hr, o); // Trimmed
+                        }
+                        
                         r.r4 = readR(BedTools::intersect(dr, rr, edge), o); // Trimmed
                     }
                     
+                    assert(!r.r1->inters().empty());
+                    assert(!r.r2->inters().empty());
+                    assert(!r.r3->inters().empty());
+                    assert(!r.r4->inters().empty());
+
                     initAR(r);
                     r.t1 = readTrans(Reader(GInfoCode(_p.opts.at(OPT_RESOURCE)).path));
                     
                     // Attributes on chrQS (hg19/hg38 not supported)
                     r.r5 = readR(GFeatBED_(!bothHR ? chrQ : build), RegionOptions()); // Never trimming
                     
-                    r.l1 = readL(std::bind(&Standard::addAF, &s, std::placeholders::_1), OPT_R_VCF, r, GVCF(Build::hg38));
-                    r.l2 = readTSV(Reader(option(OPT_ATTTSV, GAttrBED_())), r);
-                    r.l3 = readTSV(Reader(option(OPT_SYNC, GLTSV())), r, 2);
+                    const auto hg38V = isCancer ? CVCF(Build::hg38) : GVCF(Build::hg38);
+                    const auto chrQV = isCancer ? CVCF(Build::chrQ) : GVCF(Build::chrQ);
                     
-                    r.v1 = readV(OPT_R_VCF,  r, nullptr, GVCF(Build::hg38)); // All variants
-                    r.v2 = readGV(OPT_R_VCF, r, nullptr, GVCF(Build::hg38)); // Germline variants
-                    r.v3 = readSV(OPT_R_VCF, r, nullptr, GVCF(Build::hg38)); // Somatic variants
-                    r.v4 = readV(OPT_R_VCF,  r, nullptr, GVCF(Build::chrQ)); // All decoy variants
+                    /*
+                     * Allele frequency ladder, it's assumed that chrQ and hg38 encode the same AF so only the hg38
+                     * file is used. Locations will not be read.
+                     */
+                    
+                    r.l1 = readL(std::bind(&Standard::addAF, &s, std::placeholders::_1), OPT_R_VCF, r, hg38V);
+                    r.l2 = readTSV(Reader(option(OPT_ATTTSV, GAttrBED_())), r); // Attributes
+                    r.l3 = readTSV(Reader(option(OPT_SYNC, GLTSV())), r, 2); // Synthetuc ladder
+                    
+                    r.v1 = readV(OPT_R_VCF,  r, nullptr, hg38V); // All variants
+                    r.v2 = readGV(OPT_R_VCF, r, nullptr, hg38V); // Germline variants
+                    r.v3 = readSV(OPT_R_VCF, r, nullptr, hg38V); // Somatic variants
+                    r.v4 = readV(OPT_R_VCF,  r, nullptr, chrQV); // All decoy variants
 
                     break;
                 }
@@ -1247,19 +1329,25 @@ void parse(int argc, char ** argv)
                     break;
                 }
 
+                case Tool::Cancer:
                 case Tool::Calibrate:
                 {
                     typedef GCalibrate::Method Method;
                     const auto isChrQ = _p.opts.count(OPT_COMBINE);
+                    const auto isCancer = _p.tool == Tool::Cancer;
+                    
+                    const auto f1 = isCancer ? CDFA() : GDFA();
+                    const auto f2 = isCancer ? CSFA() : GSFA();
                     
                     GCalibrate::Options o;
-                    initSOptions(o, isChrQ ? GDFA() : GSFA(), isChrQ ? GDFA() : GSFA());
+                    initSOptions(o, isChrQ ? f1 : f2, isChrQ ? f1 : f2);
                     o.edge = _p.opts.count(OPT_EDGE) ? stoi(_p.opts[OPT_EDGE]) : DEFAULT_EDGE;
                     
                     o.writeS = _p.opts.count(OPT_ONLY_S);
                     o.writeD = _p.opts.count(OPT_ONLY_D);
                     o.writeC = _p.opts.count(OPT_ONLY_C);
-                    
+                    o.isCancer = isCancer;
+
                     // How to calibrate?
                     const auto meth = _p.opts.count(OPT_METHOD) ? _p.opts[OPT_METHOD] : "mean";
                     
@@ -1280,7 +1368,7 @@ void parse(int argc, char ** argv)
                     {
                         throw std::runtime_error("Unknown method: " + meth);
                     }
-
+                    
                     if (o.bam)
                     {
                         analyze_1<GCalibrate>("calibrate", OPT_COMBINE, o);

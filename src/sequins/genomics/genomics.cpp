@@ -21,6 +21,66 @@ typedef ParserBAMBED::Response Response;
 typedef LadderCalibrator::Method Method;
 typedef LadderCalibrator::Options::PoolData PoolData;
 
+/*
+ * Capture regions may break a sequin region into non-overlapping smaller regions. This function merges them and return
+ * a data structure that resembles as if a single region.
+ */
+
+static std::shared_ptr<DInter::Stats> mergeStats(const Chr2DInters &r, const std::string &x, const WriterOptions &o)
+{
+    extern bool __HACK_IS_CAPTURE__;
+    auto stats = std::shared_ptr<DInter::Stats>(new DInter::Stats());
+    
+    // Only if capture and original sequin name failed to match
+    if (__HACK_IS_CAPTURE__ && !r.find(x))
+    {
+        std::vector<Coverage> p25, p50, p75, mean, n;
+
+        for (auto i = 1;; i++) // Start from "1"
+        {
+            const auto name = x + "_" + std::to_string(i); // Capture
+            const DInter *m = nullptr;
+            
+            if ((m = r.find(name)))
+            {
+                const auto tmp = m->stats();
+                p25.push_back(tmp.p25);
+                p50.push_back(tmp.p50);
+                p75.push_back(tmp.p75);
+                n.push_back(tmp.n);
+                mean.push_back(tmp.mean);
+                continue;
+            }
+            
+            break;
+        }
+        
+        if (p25.empty())
+        {
+            return nullptr;
+        }
+        
+        stats->n    = SS::sum(n);
+        stats->p25  = SS::mean(p25);
+        stats->p50  = SS::mean(p50);
+        stats->p75  = SS::mean(p75);
+        stats->mean = SS::mean(mean);
+        
+        // Only a few selected fields should be sufficient for coverage calculation
+        return stats;
+    }
+    else
+    {
+        if (r.find(x))
+        {
+            *stats = r.find(x)->stats();
+            return stats;
+        }
+        
+        return nullptr;
+    }
+}
+
 void GDecoyResults::writeR(const GDecoyResults &r, const GDecoyOptions &o)
 {
     if (o.tsvR.empty())
@@ -67,13 +127,18 @@ void GDecoyResults::writeR(const GDecoyResults &r, const GDecoyOptions &o)
         for (auto &j : i.second.data())
         {
             const auto &name = j.second.id();
-            const auto samp = r.samp.r1.find(name);
             const auto norm = o.seqC == NO_CALIBRATION ? getNAFromD(r.c1.norms, name, 4) : MISSING;
             
             const auto afterN = r.after.r1.find(name) ? S0(r.after.r1.find(name)->stats().n) : MISSING;
-            const auto afterM = r.after.r2.find(name) ? S4(r.after.r2.find(name)->stats().mean) : MISSING;
             
-            const auto before = r.before.r2.find(name);
+            // Sample coverage before and after calibration (r2 to make it consistent)
+            const auto sampS = mergeStats(r.samp.r2, name, o);
+            
+            // Sequin coverage before calibration (merging because it could be intersecting capture regions)
+            const auto beforeS = mergeStats(r.before.r2, name, o);
+
+            // Sequin coverage after calibration (merging because it could be intersecting capture regions)
+            const auto afterS = mergeStats(r.after.r2, name, o);
             
             o.writer->write((boost::format(f) % name
                                               % i.first
@@ -81,12 +146,12 @@ void GDecoyResults::writeR(const GDecoyResults &r, const GDecoyOptions &o)
                                               % j.second.l().end
                                               % o.edge
                                               % r.lib.meanRL()
-                                              % (samp ? S0(r.samp.r1.find(name)->stats().n) : MISSING)
+                                              % (sampS ? S0(sampS->n) : MISSING)
                                               % r.before.r1.find(name)->stats().n
                                               % afterN
-                                              % (samp ? S4(r.samp.r2.find(name)->stats().mean) : MISSING)
-                                              % (before ? S4(r.before.r2.find(name)->stats().mean) : MISSING)
-                                              % afterM
+                                              % (sampS ? S4(sampS->mean) : MISSING)
+                                              % (beforeS ? S4(beforeS->mean) : MISSING)
+                                              % (afterS  ? S4(afterS->mean)  : MISSING)
                                               % norm).str());
         }
     }
@@ -214,10 +279,15 @@ void GDecoyResults::writeV(const GDecoyResults &r, const GDecoyOptions &o)
             const auto X1 = r.bAF.find(noPID(i.name));
             const auto X2 = r.aAF.find(noPID(i.name));
 
-            const auto &R1 = X1 ? X1->R : 0;
-            const auto &V1 = X1 ? X1->V : 0;
-            const auto &R2 = X2 ? X2->R : 0;
-            const auto &V2 = X2 ? X2->V : 0;
+            const auto &R1 = X1 ? X1->R : 0; // Reference counts before calibration
+            const auto &V1 = X1 ? X1->V : 0; // Reference counts before calibration
+            const auto &R2 = X2 ? X2->R : 0; // Variant counts after calibration
+            const auto &V2 = X2 ? X2->V : 0; // Variant counts after calibration
+
+            assert(R1 >= 0);
+            assert(R2 >= 0);
+            assert(V1 >= 0);
+            assert(V2 >= 0);
 
             o.writer->write((boost::format(f) % i.name
                                               % bin2Label(GBin(i.name))
@@ -402,6 +472,8 @@ std::map<SequinID, GDecoyResults::VariantData> GDecoyResults::buildAF(const Deco
                 {
                     mm[v.name].R = f1(x.sd.at("All").match);
                     mm[v.name].V = f2(x.sd.at("All").snps);
+                    assert(mm[v.name].R >= 0);
+                    assert(mm[v.name].V >= 0);
                 }
 
                 break;
@@ -433,18 +505,19 @@ std::map<SequinID, GDecoyResults::VariantData> GDecoyResults::buildAF(const Deco
                 // AF for insertion
                 auto I = [&](const MData &d1, const IDData &d2)
                 {
-                    // Number of insertions is simply the number reported in CIGAR
+                    // Number of insertions is simply the number reported in CIGAR (IGV has the information)
                     const auto V = f2(d2, v.l.start);
 
                     /*
-                       * Inserted sequences are not in the reference, but we can infer the
-                       * number of references by subtracing all reads by inserted reads. Note
-                       * each inserted read is also a contribution to the total reads.
-                       */
+                     * Inserted sequences are not in the reference, but we can infer the
+                     * number of references by subtracing all reads by inserted reads. Note
+                     * each inserted read is also a contribution to the total reads.
+                     */
                     
                     const auto R1 = f1(d1, v.l.start);
                     const auto R2 = R1 - V;
                     
+                    assert(R2 >= 0);
                     return std::pair<Coverage, Coverage>(f1(d1, v.l.start) - V, V);
                 };
 
@@ -470,8 +543,12 @@ std::map<SequinID, GDecoyResults::VariantData> GDecoyResults::buildAF(const Deco
                                                                        x.sd.at("All").dls) :
                                                                      I(x.sd.at("All").match,
                                                                        x.sd.at("All").ins);
+                    
                     mm[v.name].R = b.first;
                     mm[v.name].V = b.second;
+                    
+                    assert(mm[v.name].R >= 0);
+                    assert(mm[v.name].V >= 0);
                 }
 
                 break;
@@ -600,6 +677,9 @@ GDecoyOptions GDecoyOptions::create(const FileName &writeS,
 
 GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, const GDecoyOptions &_o_, G1 g1, G2 g2)
 {
+    assert(!_o_.r1.inters().empty());
+    assert(!_o_.r2.inters().empty());
+    
     assert(!_o_.writeL1.empty() && !_o_.inputL2.empty());
     
     // Either decoy calibration or sample/sequin calibration or nothing
@@ -687,6 +767,8 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
     o_.d1 = std::shared_ptr<SampleCNV2Data>(new SampleCNV2Data());
     o_.r1 = o.r1;
     o_.d1->tsvL = o.work + "/" + o.tsvL1NotMerged; // Unmerged for calibration
+    
+    // Making it "chrQ" will also read in "chrQL". Let's assume "chrQR" is not causing problems here...
     o_.d1->sampC = meanSamp(o.work + "/" + o.tsvR, f2.empty() ? "chrQS" : "chr");
 
     o_.logger = o.logger;
@@ -778,18 +860,13 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
             
             if (o.debug)
             {
-                //for (auto &i : samp.raws)
-                //{
-                //    o.logInfo("[DEBUG]: " + std::to_string(i));
-                //}
-
                 o.logInfo("Inside getNormFactors(). sample.mean = " + std::to_string(samp.mean));
                 o.logInfo("Inside getNormFactors(). sample.median = " + std::to_string(samp.p50));
             }
                         
             for (auto &i : inters)
             {
-                if (isChrQ && i.first != GDecoyChrQS)
+                if (isChrQ && i.first != GDecoyChrQS && i.first != GDecoyChrQR)
                 {
                     continue;
                 }
@@ -797,20 +874,25 @@ GDecoyResults Anaquin::GDecoyAnalysis(const FileName &f1, const FileName &f2, co
                 for (auto &j : i.second.data())
                 {
                     const auto &name = j.second.id();
-                    
                     const auto before = r.before.r2.find(name);
                     
                     const auto m1 = o.meth != CalibrateMethod::Custom ? o.meth : CalibrateMethod::Mean;
                     const auto m2 = o.meth != CalibrateMethod::Custom ? o.meth : CalibrateMethod::Mean;
 
+                    // Sequin coverage before calibration (merging because it could be intersecting capture regions)
+                    const auto beforeS = mergeStats(r.before.r2, name, o);
+
                     // Sequin coverage
-                    const auto seqC = before ? getLocalCoverage(r.before.r2.find(name)->stats(), m1) : NAN;
+                    const auto seqC = beforeS ? getLocalCoverage(*beforeS, m1) : NAN;
 
                     // Sequin median (only used in custom)
                     const auto samM = samp.p50;
                     
+                    // Sample coverage (merging because it could be intersecting capture regions)
+                    const auto sampS = mergeStats(r.samp.r2, name, o);
+                                        
                     // Provisional local sample coverage
-                    const auto samC1 = getLocalCoverage(r.samp.r2.find(name)->stats(), m2);
+                    const auto samC1 = sampS ? getLocalCoverage(*sampS, m2) : NAN;
 
                     // Final sample coverage
                     auto samC2 = samC1;

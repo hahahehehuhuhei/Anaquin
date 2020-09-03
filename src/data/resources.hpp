@@ -22,15 +22,17 @@ namespace Anaquin
     Scripts meta();
     Scripts norm();
     Scripts split();
+    Scripts cancer();
     Scripts somatic();
     Scripts broadBAM();
     Scripts broadVCF();
     Scripts germline();
     Scripts partition();
     Scripts calibrate();
+    Scripts cancer();
     
     Scripts CSS();
-    Scripts PReport();
+    Scripts hg382chrQ();
     Scripts NormHTML();
     Scripts GermHTML();
     Scripts SomaHTML();

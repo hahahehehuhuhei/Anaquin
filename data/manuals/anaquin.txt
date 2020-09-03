@@ -24,6 +24,7 @@ General options
             split         - For use with genomics sequins. Partition a NGS library (.FASTQ) file into two libraries: reads from sequins and reads from the accompanying
                             (human) sample. Also reports on sequin performance in NGS library. 
             calibrate     - Sequin alignments are subsampled to match the alignment coverage of the accompanying (human) sample (genome sequins only).
+            cancer        - Sequin alignments are subsampled to match the alignment coverage of the accompanying (human) sample (somatic sequins only).
             germline      - Assess the detection of germline variants in sequins and sample (genome sequins only).   
             somatic       - Assess the detection of somatic variants in sequins and sample (genome sequins only).
 <<@@@@>>

@@ -14,28 +14,20 @@ data  = [ "data/manuals/anaquin.txt",
           "data/manuals/meta.txt",
           "data/manuals/norm.txt",
           "data/manuals/split.txt",
+          "data/manuals/cancer.txt",
           "data/manuals/somatic.txt",
           "data/manuals/germline.txt",
           "data/manuals/calibrate.txt",
           "data/manuals/broad_bam.txt",
           "data/manuals/broad_vcf.txt",         
 
-          "scripts/report.py",
-          "scripts/template/norm.html",          
-          "scripts/template/calibrate.html",          
-          "scripts/template/gSplit.html",
-          "scripts/template/rSplit.html",
-          "scripts/template/mSplit.html",
-          "scripts/template/somatic.html",          
-          "scripts/template/germline.html",
-          "scripts/template/style.css",
-
+          "scripts/hg382chrQ.py",
           "src/r/plotGene.R",
           "src/r/plotNorm.R",
           "src/r/plotInsert.R",
           "src/r/plotLinear.R",
           "src/r/plotAllele.R",
-          "src/r/plotSomatic.R",          
+          "src/r/plotSomatic.R",
           "src/r/plotKSomatic.R",
           "src/r/plotWhisker.R",
           "src/r/plotLDensity.R",
@@ -68,4 +60,4 @@ for i in range(0, len(data)):
     checkEOF(data[i])    
     xxd(data[i], dst)
 
-os.system("rm src/data/resources.o")
+os.system("rm -f src/data/resources.o")

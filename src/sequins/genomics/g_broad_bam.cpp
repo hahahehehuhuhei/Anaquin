@@ -13,7 +13,7 @@ GBroadBam::SomaticReport GBroadBam::reportS(const FileName &file)
     const auto tmp1 = tmpFile();
     const auto tmp2 = tmpFile();
     const auto tmp3 = tmpFile();
-
+    
     // Construct log-linear model
     RGrep(file, tmp1, "LABEL", "Somatic"); r.lm = RLinear(tmp1, "NAME", "EXP_FREQ", "OBS_FREQ_CALIB").linear(false);
     
@@ -38,10 +38,10 @@ GBroadBam::SomaticReport GBroadBam::reportS(const FileName &file)
     
     std::map<double, Data> m;
     
+    // For each allele frequency group...
     for (const auto &exp : exps)
     {
         RGrep(tmp1, tmp2, "EXP_FREQ", exp.first);
-        
         m[stod(exp.first)].ref = numeric<Count>(RList(tmp2, "REF_COUNT_CALIB"));
         m[stod(exp.first)].var = numeric<Count>(RList(tmp2, "VAR_COUNT_CALIB"));
         m[stod(exp.first)].obs = numeric<Proportion>(RList(tmp2, "OBS_FREQ_CALIB"));
@@ -51,7 +51,6 @@ GBroadBam::SomaticReport GBroadBam::reportS(const FileName &file)
     
     for (auto i = m.rbegin(); i != m.rend(); i++)
     {
-        //ss << extend(std::to_string(i->first), 15) << "\t"
         ss << (i != m.rbegin() ? "\n" : "")
            << std::to_string(i->first) << "\t"
            << (!i->second.obs.empty() ? S4(SS::mean(i->second.obs)) : "NA") << " ; "
@@ -339,6 +338,8 @@ GBroadBam::CoverageReport GBroadBam::reportC(const FileName &file, bool isChrQ)
 
     RGrep(file, tmp1, "NAME", "All");
     RGrep(file, tmp2, "NAME", "All", false);
+    
+    // Making it "chrQ" will also read in "chrQL". Let's assume "chrQR" is not causing problems here...
     if (isChrQ) { RGrep(tmp2, tmp3, "CHROM", "chrQS"); } else { tmp3 = tmp2; }
     
     const auto x4 = numeric<Coverage>(RReadTSV(tmp3, "SAMPLE_COVERAGE"));
@@ -448,25 +449,29 @@ static void writeSummary(const FileName &file,
     const auto C = GBroadBam::reportC(o2.work + "/" + o2.tsvR, isChrQ);
     const auto L = GBroadBam::reportL(o2.work + "/" + o2.tsvL2);
     const auto M = GBroadBam::reportM(o2.work + "/" + o2.tsvR, r.t1());
+    
+    // Only after calibration. Neat mixture won't work.
     const auto E = GBroadBam::reportE(o2.work + "/" + o2.tsvE,
                                       o2.work + "/" + o2.tsvR,
                                       o2.work + "/" + o2.tsvF,
                                       true,
                                       isChrQ);
 
+    extern bool __HACK_IS_CANCER__;
+    
     o1.generate(file);
     o1.writer->open(file);
     o1.writer->write((boost::format(f) % date()                                 // 1
                                        % o1.version                             // 2
                                        % o1.cmd                                 // 3
-                                       % M.text                                 // 4
+                                       % (__HACK_IS_CANCER__ ? "v3" : M.text)   // 4
                                        % o1.index                               // 5
                                        % r.r2()->src                            // 6
                                        % r.r1()->src                            // 7
                                        % (f2.empty() ? f1 : f1 + " and " + f2)  // 8
-                                       % (origW + "/sequin.bam")              // 9
-                                       % (origW + "/sequin_calibrated.bam")   // 10
-                                       % (origW + "/merged.bam")              // 11
+                                       % (origW + "/sequin.bam")                // 9
+                                       % (origW + "/sequin_calibrated.bam")     // 10
+                                       % (origW + "/merged.bam")                // 11
                                        % rr.lib.inst(rr.lib.format())           // 12
                                        % rr.lib.run(rr.lib.format())            // 13
                                        % rr.lib.flow(rr.lib.format())           // 14
@@ -504,7 +509,7 @@ static void writeSummary(const FileName &file,
 }
 
 void GBroadBam::report(const FileName &f1, const FileName &f2, const Options &o1)
-{
+{    
     GDecoyOptions o2;
     
     if (o1.debug) { o2.work = o1.work;   } // Always write to working directory if debug
@@ -552,6 +557,9 @@ void GBroadBam::report(const FileName &f1, const FileName &f2, const Options &o1
 
     o2.index = o1.index;
     o2.writer = std::shared_ptr<Writer<>>(new FileWriter(o2.work));
+
+    assert(!o2.r1.empty());
+    assert(!o2.r2.empty());
 
     if (f2.empty())
     {
